@@ -28,16 +28,18 @@ public class FeedController {
 
     @GetMapping("/{key}")
     @ResponseBody
-    public void getDataFromExternalApi(@PathVariable String key, HttpServletResponse response) throws IOException {
+    public void getFeed(@PathVariable String key, HttpServletResponse response) throws IOException {
 
         if(!feedsConfigService.isValidKey(key)){
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            log.info("getFeed " + key + " NOT_FOUND");
             return;
         }
 
         final FeedCacheEntry feedCacheEntry = feedsDownloadService.getFeedCacheEntry(key);
         if(feedCacheEntry == null || !feedCacheEntry.hasActualContent()){
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            log.info("getFeed " + key + " SERVICE_UNAVAILABLE");
             return;
         }
 
@@ -46,6 +48,7 @@ public class FeedController {
         response.setCharacterEncoding(buildCharacterEncodingHeaderField(feedCacheEntry));
         response.setHeader("Last-Modified", buildLastModifiedHeaderField(feedCacheEntry));
         response.getWriter().print(feedCacheEntry.getContent());
+        log.info("getFeed " + key + " OK");
     }
 
     private static String buildLastModifiedHeaderField(FeedCacheEntry feedCacheEntry) {
