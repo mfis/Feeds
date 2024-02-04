@@ -77,7 +77,7 @@ public class FeedsConfigService {
 
     private Path lookupPath() {
         if(path == null){
-            path = Path.of(System.getProperty("user.home") + "/Documents/config/feeds/config.json/");
+            path = Path.of(System.getProperty("user.home") + "/Documents/config/feeds/config.json");
         }
         return path;
     }
