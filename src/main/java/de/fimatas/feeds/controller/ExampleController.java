@@ -27,7 +27,7 @@ public class ExampleController {
         feed.setFeedType("rss_2.0");
         feed.setTitle("ExampleFeed");
         feed.setDescription("ExampleFeed description");
-        feed.setLink("https://feeds.fimatas.de/example");
+        feed.setLink("http://localhost:8081/example");
 
         SyndEntry entry1 = new SyndEntryImpl();
         entry1.setTitle("Example title 1");

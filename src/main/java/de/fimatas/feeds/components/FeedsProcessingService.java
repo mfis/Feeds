@@ -27,6 +27,9 @@ public class FeedsProcessingService {
     @Value("${relevantDescriptionLength}")
     private int relevantDescriptionLength;
 
+    @Value("${externalURL}")
+    private String externalURL;
+
     @SneakyThrows
     public String processFeed(@Nullable String originalFeed, FeedConfig feedConfig){
 
@@ -36,6 +39,11 @@ public class FeedsProcessingService {
 
         SyndFeed syndFeed = new SyndFeedInput()
                 .build(new InputSource(new ByteArrayInputStream(originalFeed.getBytes(StandardCharsets.UTF_8))));
+
+        var originalLink = syndFeed.getLink();
+        var originalDescription = syndFeed.getDescription();
+        syndFeed.setLink(externalURL + "/api/feeds/" + feedConfig.getKey());
+        syndFeed.setDescription("FILTERED FEED. ORIGINAL LINK = '" + originalLink + "'. ORIGINAL DESCRIPTION = '" + originalDescription + "'.");
 
         List<SyndEntry> filteredEntries = processEntries(syndFeed.getEntries(), feedConfig);
         syndFeed.setEntries(filteredEntries);
