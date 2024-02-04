@@ -39,7 +39,7 @@ public class ExampleController {
 
         SyndEntry entry2 = new SyndEntryImpl();
         entry2.setTitle("Example title 2");
-        entry1.setLink("https://feeds.fimatas.de/example/2");
+        entry2.setLink("https://feeds.fimatas.de/example/2");
         entry2.setPublishedDate(new Date());
         var content2 = new SyndContentImpl();
         content2.setValue("This is content2");
