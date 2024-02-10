@@ -48,7 +48,6 @@ public class FeedController {
         response.setCharacterEncoding(buildCharacterEncodingHeaderField(feedCacheEntry));
         response.setHeader("Last-Modified", buildLastModifiedHeaderField(feedCacheEntry));
         response.getWriter().print(feedCacheEntry.getContent());
-        log.info("getFeed " + key + " OK");
     }
 
     private static String buildLastModifiedHeaderField(FeedCacheEntry feedCacheEntry) {
