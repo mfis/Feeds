@@ -11,4 +11,5 @@ public class FeedConfig {
     private String url;
     private List<String> includeRefs;
     private List<String> excludeRefs;
+    private boolean active;
 }
