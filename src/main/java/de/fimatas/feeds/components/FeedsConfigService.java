@@ -6,6 +6,7 @@ import de.fimatas.feeds.model.FeedsConfig;
 import lombok.SneakyThrows;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +17,9 @@ import java.util.List;
 @Component
 @CommonsLog
 public class FeedsConfigService {
+
+    @Value("${config}")
+    private String configFile;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -77,7 +81,7 @@ public class FeedsConfigService {
 
     private Path lookupPath() {
         if(path == null){
-            path = Path.of(System.getProperty("user.home") + "/Documents/config/feeds/config.json");
+            path = Path.of(System.getProperty("user.home") + "/Documents/config/feeds/" + configFile);
         }
         return path;
     }

@@ -24,9 +24,14 @@ import reactor.netty.http.client.HttpClient;
 import java.io.StringReader;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @CommonsLog
@@ -44,6 +49,10 @@ public class FeedsDownloadService {
     @Value("${defaultRefreshDurationMinutes}")
     private int defaultRefreshDurationMinutes;
 
+    private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+    private ScheduledFuture<?> currentTask;
+    private final LocalTime dailyEndTime = LocalTime.of(22, 30);   // Endzeit
+
     private final WebClient webClient = WebClient.builder().clientConnector(
             new ReactorClientHttpConnector(HttpClient.create().followRedirect(true))).build();
 
@@ -59,9 +68,36 @@ public class FeedsDownloadService {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    @Scheduled(cron = "30 20 5-22 * * *")
+    @Scheduled(cron = "30 20 5 * * *")
     private void refreshFeedDownloads() {
-        refresh();
+        cancelCurrentTaskIfRunning();
+        scheduleNextTask(true);
+    }
+
+    private void cancelCurrentTaskIfRunning() {
+        if (currentTask != null && !currentTask.isDone()) {
+            currentTask.cancel(true);
+            System.out.println("Aktiver Task wurde abgebrochen.");
+        }
+    }
+
+    private synchronized void scheduleNextTask(boolean isInitialRun) {
+        LocalTime now = LocalTime.now();
+
+        if (now.isAfter(dailyEndTime)) {
+            System.out.println("Ende-Zeit erreicht. Kein weiterer Task wird geplant.");
+            return;
+        }
+
+        var delayMinutes = isInitialRun ? 0 :
+                cache.values().stream().map(FeedCacheEntry::getTtl).max(Duration::compareTo)
+                        .orElse(Duration.ofMinutes(defaultRefreshDurationMinutes)).toMinutes();
+        log.info("DELAY_MINUTES: " + delayMinutes);
+
+        currentTask = executorService.schedule(() -> {
+            refresh();
+            scheduleNextTask(false);
+        }, delayMinutes, TimeUnit.MINUTES);
     }
 
     private void refresh() {
@@ -74,8 +110,6 @@ public class FeedsDownloadService {
                 fallback(feedConfig, e);
             }
         }
-        var maxRefreshDurationMinutes = cache.values().stream().map(FeedCacheEntry::getTtl).max(Duration::compareTo).orElseThrow();
-        System.out.println("MAX_REFRESH_DURATION_MINUTES: " + maxRefreshDurationMinutes);
     }
 
     private void refreshFeed(FeedConfig feedConfig) {
