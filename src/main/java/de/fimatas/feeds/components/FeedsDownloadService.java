@@ -60,6 +60,8 @@ public class FeedsDownloadService {
 
     private final FeedsDownloadCircuitBreaker feedsDownloadCircuitBreaker = new FeedsDownloadCircuitBreaker();
 
+    private LocalDateTime lastRefreshMethodCall = null;
+
     public FeedCacheEntry getFeedCacheEntry(String key){
         if(StringUtils.isEmpty(key)){
             return null;
@@ -70,6 +72,9 @@ public class FeedsDownloadService {
     @EventListener(ApplicationReadyEvent.class)
     @Scheduled(cron = "30 20 5 * * *")
     private void refreshFeedDownloads() {
+        if(lastRefreshMethodCall == null){
+            lastRefreshMethodCall = LocalDateTime.now().minusMinutes(defaultRefreshDurationMinutes);
+        }
         cancelCurrentTaskIfRunning();
         scheduleNextTask(true);
     }
@@ -90,20 +95,30 @@ public class FeedsDownloadService {
         currentTask = executorService.schedule(() -> {
             refresh(isInitialRun);
             scheduleNextTask(false);
-        }, getDelayMinutes(isInitialRun), TimeUnit.MINUTES);
+        }, getDelayMinutes(isInitialRun) + 1, TimeUnit.MINUTES);
     }
 
     private void refresh(boolean isInitialRun) {
 
+        // check interval against cache
         if(!isInitialRun){
             var maxLastRefresh = cache.values().stream().map(FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
             var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, LocalDateTime.now());
             if(maxDurationSinceLastRefresh.compareTo(Duration.ofMinutes(getDelayMinutes(false))) < 1){
-                log.warn("skipping refresh: " + maxDurationSinceLastRefresh + " / " + getDelayMinutes(false));
+                log.warn("skipping refresh (cache): " + maxDurationSinceLastRefresh + " / " + getDelayMinutes(false));
                 return;
             }
         }
 
+        // check interval against method call
+        System.out.println(Duration.between(lastRefreshMethodCall, LocalDateTime.now()).toMinutes());
+        if(Duration.between(lastRefreshMethodCall, LocalDateTime.now()).toMinutes() < defaultRefreshDurationMinutes){
+            log.warn("skipping refresh (method call): " + lastRefreshMethodCall);
+            return;
+        }
+
+        // finally refresh
+        lastRefreshMethodCall = LocalDateTime.now();
         for(var feedConfig : feedsConfigService.getFeedsConfigList()){
             var decoratedRunnable = CircuitBreaker.decorateRunnable(feedsDownloadCircuitBreaker.getCircuitBreaker(feedConfig),
                    () -> refreshFeed(feedConfig));
