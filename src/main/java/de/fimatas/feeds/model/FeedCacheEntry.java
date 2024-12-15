@@ -5,7 +5,6 @@ import org.springframework.http.MediaType;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 @Data
 public class FeedCacheEntry {

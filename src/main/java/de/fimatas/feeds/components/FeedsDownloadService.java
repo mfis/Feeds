@@ -77,7 +77,6 @@ public class FeedsDownloadService {
     private void cancelCurrentTaskIfRunning() {
         if (currentTask != null && !currentTask.isDone()) {
             currentTask.cancel(true);
-            System.out.println("Aktiver Task wurde abgebrochen.");
         }
     }
 
@@ -85,22 +84,26 @@ public class FeedsDownloadService {
         LocalTime now = LocalTime.now();
 
         if (now.isAfter(dailyEndTime)) {
-            System.out.println("Ende-Zeit erreicht. Kein weiterer Task wird geplant.");
             return;
         }
 
-        var delayMinutes = isInitialRun ? 0 :
-                cache.values().stream().map(FeedCacheEntry::getTtl).max(Duration::compareTo)
-                        .orElse(Duration.ofMinutes(defaultRefreshDurationMinutes)).toMinutes();
-        log.info("DELAY_MINUTES: " + delayMinutes);
-
         currentTask = executorService.schedule(() -> {
-            refresh();
+            refresh(isInitialRun);
             scheduleNextTask(false);
-        }, delayMinutes, TimeUnit.MINUTES);
+        }, getDelayMinutes(isInitialRun), TimeUnit.MINUTES);
     }
 
-    private void refresh() {
+    private void refresh(boolean isInitialRun) {
+
+        if(!isInitialRun){
+            var maxLastRefresh = cache.values().stream().map(FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
+            var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, LocalDateTime.now());
+            if(maxDurationSinceLastRefresh.compareTo(Duration.ofMinutes(getDelayMinutes(false))) < 1){
+                log.warn("skipping refresh: " + maxDurationSinceLastRefresh + " / " + getDelayMinutes(false));
+                return;
+            }
+        }
+
         for(var feedConfig : feedsConfigService.getFeedsConfigList()){
             var decoratedRunnable = CircuitBreaker.decorateRunnable(feedsDownloadCircuitBreaker.getCircuitBreaker(feedConfig),
                    () -> refreshFeed(feedConfig));
@@ -212,5 +215,11 @@ public class FeedsDownloadService {
             return Optional.empty();
         }
         return Optional.empty();
+    }
+
+    private long getDelayMinutes(boolean isInitialRun) {
+        return isInitialRun ? 0 :
+                cache.values().stream().map(FeedCacheEntry::getTtl).max(Duration::compareTo)
+                        .orElse(Duration.ofMinutes(defaultRefreshDurationMinutes)).toMinutes();
     }
 }
