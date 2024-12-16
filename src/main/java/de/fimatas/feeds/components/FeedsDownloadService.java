@@ -25,6 +25,7 @@ import java.io.StringReader;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
@@ -93,9 +94,13 @@ public class FeedsDownloadService {
         }
 
         currentTask = executorService.schedule(() -> {
-            refresh(isInitialRun);
-            scheduleNextTask(false);
-        }, getDelayMinutes(isInitialRun) + 1, TimeUnit.MINUTES);
+            try {
+                refresh(isInitialRun);
+                scheduleNextTask(false);
+            } catch(Exception ex) {
+                log.error("Exception occured executingrefresh: ", ex);
+            }
+        }, getDelayMinutes(isInitialRun) + (isInitialRun? 0 : 1), TimeUnit.MINUTES);
     }
 
     private void refresh(boolean isInitialRun) {
@@ -111,7 +116,6 @@ public class FeedsDownloadService {
         }
 
         // check interval against method call
-        System.out.println(Duration.between(lastRefreshMethodCall, LocalDateTime.now()).toMinutes());
         if(Duration.between(lastRefreshMethodCall, LocalDateTime.now()).toMinutes() < defaultRefreshDurationMinutes){
             log.warn("skipping refresh (method call): " + lastRefreshMethodCall);
             return;
@@ -226,10 +230,43 @@ public class FeedsDownloadService {
             if (wireFeed instanceof Channel channel && channel.getTtl() > 0) {
                 return Optional.of(Duration.ofMinutes(channel.getTtl()));
             }
+            if(wireFeed.getForeignMarkup() != null) {
+                var updatePeriod = foreignMarkupValue(wireFeed, "updatePeriod");
+                var updateFrequency =foreignMarkupValue(wireFeed, "updateFrequency");
+                var updateBase = foreignMarkupValue(wireFeed, "updateBase");
+                if(updatePeriod != null && updateFrequency != null) {
+                    var updateDuration = Duration.ofMinutes(getPeriodMinutes(updatePeriod) / Long.parseLong(updateFrequency));
+                    if(updateBase != null) {
+                        DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
+                        ZonedDateTime dateTime = ZonedDateTime.parse(updateBase, formatter);
+                        if(dateTime.isAfter(ZonedDateTime.now())) {
+                            var baseDuration = Duration.between(ZonedDateTime.now(), dateTime);
+                            return Optional.of(baseDuration.plus(updateDuration));
+                        }
+                    }
+                    return Optional.of(updateDuration);
+                }
+
+            }
         } catch (FeedException e) {
             return Optional.empty();
         }
         return Optional.empty();
+    }
+
+    private long getPeriodMinutes(String updatePeriod) {
+        return switch (updatePeriod) {
+            case "hourly" ->  60;
+            case "daily" ->  60 * 24;
+            case "weekly" ->  60 * 24 * 7;
+            case "monthly" ->  60 * 24 * 30;
+            case "yearly" ->  60 * 24 * 365;
+            default -> throw new IllegalStateException("Unexpected period: " + updatePeriod);
+        };
+    }
+
+    private static String foreignMarkupValue(WireFeed wireFeed, String name) {
+        return wireFeed.getForeignMarkup().stream().filter(fm -> fm.getName().equals(name)).findFirst().map(e -> StringUtils.trimToNull(e.getValue())).orElse(null);
     }
 
     private long getDelayMinutes(boolean isInitialRun) {

@@ -7,6 +7,8 @@ import com.rometools.rome.io.FeedException;
 import com.rometools.rome.io.WireFeedOutput;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.apachecommons.CommonsLog;
+import org.jdom2.Element;
+import org.jdom2.Namespace;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,6 +43,19 @@ public class ExampleController {
         }
         if(key.equals("example_E")){
             response.setHeader("Retry-After", DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now().plusSeconds(2400))); // seconds
+        }
+
+        if(key.equals("example_F")){
+            Namespace syNamespace = Namespace.getNamespace("sy", "http://localhost");
+            channel.getForeignMarkup().add(createSyModuleElement("updatePeriod", "hourly", syNamespace));
+            channel.getForeignMarkup().add(createSyModuleElement("updateFrequency", "2", syNamespace));
+        }
+
+        if(key.equals("example_G")){
+            Namespace syNamespace = Namespace.getNamespace("sy", "http://localhost");
+            channel.getForeignMarkup().add(createSyModuleElement("updatePeriod", "hourly", syNamespace));
+            channel.getForeignMarkup().add(createSyModuleElement("updateFrequency", "2", syNamespace));
+            channel.getForeignMarkup().add(createSyModuleElement("updateBase", DateTimeFormatter.ISO_DATE_TIME.format(ZonedDateTime.now().plusMinutes(60)), syNamespace));
         }
 
         channel.setFeedType("rss_2.0");
@@ -83,4 +98,9 @@ public class ExampleController {
         return "--unknown--";
     }
 
+    private static Element createSyModuleElement(String name, String value, Namespace namespace) {
+        Element element = new Element(name, namespace);
+        element.setText(value);
+        return element;
+    }
 }
