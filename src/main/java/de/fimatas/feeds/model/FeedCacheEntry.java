@@ -1,7 +1,6 @@
 package de.fimatas.feeds.model;
 
 import lombok.Data;
-import org.springframework.http.MediaType;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -15,7 +14,7 @@ public class FeedCacheEntry {
     private LocalDateTime lastRefresh;
     private String headerLastModified;
     private String headerContentType;
-    private Duration ttl;
+    private TtlInfo ttl;
 
     public void increaseRefreshErrorCounter(){
         refreshErrorCounter++;

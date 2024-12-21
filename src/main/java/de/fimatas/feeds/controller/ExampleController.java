@@ -55,7 +55,7 @@ public class ExampleController {
             Namespace syNamespace = Namespace.getNamespace("sy", "http://localhost");
             channel.getForeignMarkup().add(createSyModuleElement("updatePeriod", "hourly", syNamespace));
             channel.getForeignMarkup().add(createSyModuleElement("updateFrequency", "2", syNamespace));
-            channel.getForeignMarkup().add(createSyModuleElement("updateBase", DateTimeFormatter.ISO_DATE_TIME.format(ZonedDateTime.now().plusMinutes(60)), syNamespace));
+            channel.getForeignMarkup().add(createSyModuleElement("updateBase", DateTimeFormatter.ISO_DATE_TIME.format(ZonedDateTime.now().plusMinutes(10)), syNamespace));
         }
 
         channel.setFeedType("rss_2.0");

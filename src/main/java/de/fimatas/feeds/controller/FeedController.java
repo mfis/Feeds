@@ -5,7 +5,6 @@ import de.fimatas.feeds.components.FeedsDownloadService;
 import de.fimatas.feeds.model.FeedCacheEntry;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.apachecommons.CommonsLog;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,7 +44,6 @@ public class FeedController {
 
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType(buildContentTypeHeaderField(feedCacheEntry));
-        //response.setCharacterEncoding(buildCharacterEncodingHeaderField(feedCacheEntry));
         response.setHeader("Last-Modified", buildLastModifiedHeaderField(feedCacheEntry));
         response.getWriter().print(feedCacheEntry.getContent());
     }
@@ -57,12 +55,6 @@ public class FeedController {
             return Long.toString(System.currentTimeMillis());
         }
     }
-
-    /*private static String buildCharacterEncodingHeaderField(FeedCacheEntry feedCacheEntry) {
-        return feedCacheEntry.getHeaderContentType() != null
-                && feedCacheEntry.getHeaderContentType().getCharset() != null
-                ? feedCacheEntry.getHeaderContentType().getCharset().name() : "UTF-8";
-    }*/
 
     private static String buildContentTypeHeaderField(FeedCacheEntry feedCacheEntry) {
         if(feedCacheEntry.getHeaderContentType() != null){

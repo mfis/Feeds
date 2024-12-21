@@ -6,9 +6,8 @@ import com.rometools.rome.io.FeedException;
 import com.rometools.rome.io.WireFeedInput;
 import de.fimatas.feeds.model.FeedCacheEntry;
 import de.fimatas.feeds.model.FeedConfig;
+import de.fimatas.feeds.model.TtlInfo;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -21,12 +20,9 @@ import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -37,10 +33,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 @Component
 @CommonsLog
@@ -58,11 +50,8 @@ public class FeedsDownloadService {
     @Value("${defaultRefreshDurationMinutes}")
     private int defaultRefreshDurationMinutes;
 
-    private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-    private ScheduledFuture<?> currentTask;
-    private final LocalTime dailyEndTime = LocalTime.of(22, 30);   // Endzeit
-
-    private WebClient webClient;
+    private final LocalTime dailyStartTime = LocalTime.of(5, 20);
+    private final LocalTime dailyEndTime = LocalTime.of(22, 30);
 
     private Map<String, FeedCacheEntry> cache = new HashMap<>();
 
@@ -77,59 +66,39 @@ public class FeedsDownloadService {
         return cache.get(key);
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    @Scheduled(cron = "30 20 5 * * *")
-    private synchronized void refreshFeedDownloads() {
-        if(lastRefreshMethodCall == null){
-            lastRefreshMethodCall = LocalDateTime.now().minusMinutes(defaultRefreshDurationMinutes);
-        }
-        cancelCurrentTaskIfRunning();
-        scheduleNextTask(true);
+    @Scheduled(initialDelay = 1000 * 2, fixedDelay = 1000 * 60 * 3)
+    private void refreshScheduler() {
+        refresh();
     }
 
-    private void cancelCurrentTaskIfRunning() {
-        if (currentTask != null && !currentTask.isDone()) {
-            log.info("cancel current task");
-            currentTask.cancel(true);
-        }
-    }
+    private void refresh() {
 
-    private synchronized void scheduleNextTask(boolean isInitialRun) {
         LocalTime now = LocalTime.now();
-
+        if (now.isBefore(dailyStartTime)) {
+            log.info("daily start time not reached");
+            return;
+        }
         if (now.isAfter(dailyEndTime)) {
             log.info("daily end time reached");
             return;
         }
 
-        currentTask = executorService.schedule(() -> {
-            try {
-                refresh(isInitialRun);
-                scheduleNextTask(false);
-            } catch(Exception ex) {
-                log.error("Exception occured executingrefresh: ", ex);
-            }
-        // FIXME: }, getDelayMinutes(isInitialRun) + (isInitialRun? 0 : 1), TimeUnit.MINUTES);
-        }, isInitialRun ? 0 : 5, TimeUnit.MINUTES);
-    }
-
-    private void refresh(boolean isInitialRun) {
-
         // check interval against cache
-        if(!isInitialRun){
+        if(!cache.isEmpty()){
+            var delayMinutes = getDelayMinutes();
             var maxLastRefresh = cache.values().stream().map(FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
             var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, LocalDateTime.now());
-            var delayMinutes = getDelayMinutes();
             if(maxDurationSinceLastRefresh.compareTo(Duration.ofMinutes(delayMinutes)) < 1){
                 log.warn("skipping refresh (cache): " + maxDurationSinceLastRefresh + " / " + delayMinutes);
-                // FIXME: return;
+                return;
             }
         }
 
         // check interval against method call
-        if(Duration.between(lastRefreshMethodCall, LocalDateTime.now()).toMinutes() < defaultRefreshDurationMinutes){
+        if(lastRefreshMethodCall != null &&
+                Duration.between(lastRefreshMethodCall, LocalDateTime.now()).toMinutes() < defaultRefreshDurationMinutes){
             log.warn("skipping refresh (method call): " + lastRefreshMethodCall);
-            // FIXME: return;
+            return;
         }
 
         // finally refresh
@@ -145,6 +114,9 @@ public class FeedsDownloadService {
             }
         }
         cache = refreshedCache;
+
+        log.info("new overall delay: " + getDelayMinutes() + " minutes (default: " +
+                defaultRefreshDurationMinutes + ") - next refresh: " + (LocalTime.now().plusMinutes(getDelayMinutes())).toString());
     }
 
     private void refreshFeed(FeedConfig feedConfig, Map<String, FeedCacheEntry> refreshedCache) {
@@ -183,7 +155,7 @@ public class FeedsDownloadService {
 
     private void handleRefreshSuccess(FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedCacheEntry> refreshedCache){
         var ttl = newEmptyFeedCacheEntry(feedConfig, feed, responseHeader, responseBody, refreshedCache);
-        log.info("refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.map(t -> t.getTtl().toMinutes() + " min (" + t.source + ")").orElse("n/a")));
+        log.info("refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.map(t -> t.getTtl().toMinutes() + " min (" + t.getSource() + ")").orElse("n/a")));
     }
 
     private void handleRefreshError(FeedConfig feedConfig, Map<String, FeedCacheEntry> refreshedCache){
@@ -204,7 +176,7 @@ public class FeedsDownloadService {
         feedCacheEntry.setContent(feed);
         feedCacheEntry.setHeaderLastModified(getHeaderValue(responseHeader, HttpHeaders.LAST_MODIFIED));
         feedCacheEntry.setHeaderContentType(getHeaderValue(responseHeader, HttpHeaders.CONTENT_TYPE));
-        feedCacheEntry.setTtl(ttl.isPresent() ? ttl.get().getTtl() : Duration.ofMinutes(defaultRefreshDurationMinutes));
+        feedCacheEntry.setTtl(ttl.orElseThrow());
         refreshedCache.put(feedConfig.getKey(), feedCacheEntry);
         return ttl;
     }
@@ -213,7 +185,8 @@ public class FeedsDownloadService {
         var optionals = List.of(
                 getTtlMinutesFromHeaderMaxAge(responseHeader),
                 getTtlMinutesFromHeaderRetryAfter(responseHeader, key),
-                getTtlMinutesFromFeed(responseBody));
+                getTtlMinutesFromFeed(responseBody),
+                Optional.of(new TtlInfo(Duration.ofMinutes(defaultRefreshDurationMinutes), "default")));
         return optionals.stream().filter(Optional::isPresent).map(Optional::get).max(Comparator.comparing(TtlInfo::getTtl));
     }
 
@@ -298,8 +271,8 @@ public class FeedsDownloadService {
     }
 
     private long getDelayMinutes() {
-        return cache.values().stream().map(FeedCacheEntry::getTtl).max(Duration::compareTo)
-                        .orElse(Duration.ofMinutes(defaultRefreshDurationMinutes)).toMinutes();
+        return cache.values().stream().map(FeedCacheEntry::getTtl).max(Comparator.comparing(TtlInfo::getTtl))
+                .map(t -> t.getTtl().toMinutes()).orElseThrow();
     }
 
     private static String getHeaderValue(Header[] headers, String headerName) {
@@ -313,10 +286,4 @@ public class FeedsDownloadService {
         return null;
     }
 
-    @Data
-    @AllArgsConstructor
-    private static class TtlInfo{
-        private Duration ttl;
-        private String source;
-    }
 }
