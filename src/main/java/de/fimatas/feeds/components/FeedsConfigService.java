@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.nio.file.*;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @CommonsLog
@@ -76,7 +77,9 @@ public class FeedsConfigService {
 
     @SneakyThrows
     private void readFeedsConfig() {
-        feedsConfig = objectMapper.readValue(lookupPath().toFile(), FeedsConfig.class);
+        var localFeedsConfig = objectMapper.readValue(lookupPath().toFile(), FeedsConfig.class);
+        localFeedsConfig.setFeeds(localFeedsConfig.getFeeds().stream().filter(FeedConfig::isActive).collect(Collectors.toList()));
+        feedsConfig = localFeedsConfig;
     }
 
     private Path lookupPath() {

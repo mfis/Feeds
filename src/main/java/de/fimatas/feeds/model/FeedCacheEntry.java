@@ -13,8 +13,8 @@ public class FeedCacheEntry {
     private String content;
     private int refreshErrorCounter;
     private LocalDateTime lastRefresh;
-    private Long headerLastModified;
-    private MediaType headerContentType;
+    private String headerLastModified;
+    private String headerContentType;
     private Duration ttl;
 
     public void increaseRefreshErrorCounter(){

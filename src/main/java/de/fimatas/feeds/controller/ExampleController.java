@@ -25,7 +25,7 @@ public class ExampleController {
     @GetMapping
     @ResponseBody
     public void getDataFromExternalApi(HttpServletResponse response,
-                                       @RequestParam(name = "key") String key) throws IOException, FeedException {
+                                       @RequestParam(name = "key", required = false) String key) throws IOException, FeedException {
 
         Channel channel = new Channel();
 

@@ -45,32 +45,28 @@ public class FeedController {
 
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType(buildContentTypeHeaderField(feedCacheEntry));
-        response.setCharacterEncoding(buildCharacterEncodingHeaderField(feedCacheEntry));
+        //response.setCharacterEncoding(buildCharacterEncodingHeaderField(feedCacheEntry));
         response.setHeader("Last-Modified", buildLastModifiedHeaderField(feedCacheEntry));
         response.getWriter().print(feedCacheEntry.getContent());
     }
 
     private static String buildLastModifiedHeaderField(FeedCacheEntry feedCacheEntry) {
         if(feedCacheEntry.getHeaderLastModified() != null){
-            return Long.toString(feedCacheEntry.getHeaderLastModified());
+            return feedCacheEntry.getHeaderLastModified();
         }else{
             return Long.toString(System.currentTimeMillis());
         }
     }
 
-    private static String buildCharacterEncodingHeaderField(FeedCacheEntry feedCacheEntry) {
+    /*private static String buildCharacterEncodingHeaderField(FeedCacheEntry feedCacheEntry) {
         return feedCacheEntry.getHeaderContentType() != null
                 && feedCacheEntry.getHeaderContentType().getCharset() != null
                 ? feedCacheEntry.getHeaderContentType().getCharset().name() : "UTF-8";
-    }
+    }*/
 
     private static String buildContentTypeHeaderField(FeedCacheEntry feedCacheEntry) {
         if(feedCacheEntry.getHeaderContentType() != null){
-            if(StringUtils.isNotEmpty(feedCacheEntry.getHeaderContentType().getSubtype())){
-                return feedCacheEntry.getHeaderContentType().getType() + "/" + feedCacheEntry.getHeaderContentType().getSubtype();
-            }else{
-                return feedCacheEntry.getHeaderContentType().getType();
-            }
+                return feedCacheEntry.getHeaderContentType();
         }else{
             return "application/xml";
         }
