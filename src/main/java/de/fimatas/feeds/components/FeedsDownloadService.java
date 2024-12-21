@@ -7,6 +7,8 @@ import com.rometools.rome.io.WireFeedInput;
 import de.fimatas.feeds.model.FeedCacheEntry;
 import de.fimatas.feeds.model.FeedConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -181,7 +183,7 @@ public class FeedsDownloadService {
 
     private void handleRefreshSuccess(FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedCacheEntry> refreshedCache){
         var ttl = newEmptyFeedCacheEntry(feedConfig, feed, responseHeader, responseBody, refreshedCache);
-        log.info("refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.map(d -> d.toMinutes() + " minutes").orElse("n/a")));
+        log.info("refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.map(t -> t.getTtl().toMinutes() + " min (" + t.source + ")").orElse("n/a")));
     }
 
     private void handleRefreshError(FeedConfig feedConfig, Map<String, FeedCacheEntry> refreshedCache){
@@ -193,7 +195,7 @@ public class FeedsDownloadService {
         refreshedCache.get(feedConfig.getKey()).increaseRefreshErrorCounter();
     }
 
-    private Optional<Duration> newEmptyFeedCacheEntry(FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedCacheEntry> refreshedCache) {
+    private Optional<TtlInfo> newEmptyFeedCacheEntry(FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedCacheEntry> refreshedCache) {
         var ttl = getTtlMinutes(responseHeader, responseBody, feedConfig.getKey());
         FeedCacheEntry feedCacheEntry = new FeedCacheEntry();
         feedCacheEntry.setKey(feedConfig.getKey());
@@ -202,43 +204,43 @@ public class FeedsDownloadService {
         feedCacheEntry.setContent(feed);
         feedCacheEntry.setHeaderLastModified(getHeaderValue(responseHeader, HttpHeaders.LAST_MODIFIED));
         feedCacheEntry.setHeaderContentType(getHeaderValue(responseHeader, HttpHeaders.CONTENT_TYPE));
-        feedCacheEntry.setTtl(ttl.orElseGet(() -> Duration.ofMinutes(defaultRefreshDurationMinutes)));
+        feedCacheEntry.setTtl(ttl.isPresent() ? ttl.get().getTtl() : Duration.ofMinutes(defaultRefreshDurationMinutes));
         refreshedCache.put(feedConfig.getKey(), feedCacheEntry);
         return ttl;
     }
 
-    private Optional<Duration> getTtlMinutes(Header[] responseHeader, String responseBody, String key) {
+    private Optional<TtlInfo> getTtlMinutes(Header[] responseHeader, String responseBody, String key) {
         var optionals = List.of(
                 getTtlMinutesFromHeaderMaxAge(responseHeader),
                 getTtlMinutesFromHeaderRetryAfter(responseHeader, key),
                 getTtlMinutesFromFeed(responseBody));
-        return optionals.stream().filter(Optional::isPresent).map(Optional::get).max(Duration::compareTo);
+        return optionals.stream().filter(Optional::isPresent).map(Optional::get).max(Comparator.comparing(TtlInfo::getTtl));
     }
 
-    private Optional<Duration> getTtlMinutesFromHeaderMaxAge(Header[] responseHeader) {
+    private Optional<TtlInfo> getTtlMinutesFromHeaderMaxAge(Header[] responseHeader) {
         String cacheControl = getHeaderValue(responseHeader, HttpHeaders.CACHE_CONTROL);
             if (cacheControl != null && cacheControl.contains("max-age=")) {
                 try {
                     long maxAgeSeconds = Long.parseLong(cacheControl.split("max-age=")[1].split(",")[0]);
-                    return Optional.of(Duration.ofSeconds(maxAgeSeconds));
+                    return Optional.of(new TtlInfo(Duration.ofSeconds(maxAgeSeconds), "MaxAge"));
                 } catch (NumberFormatException ignored) {
                 }
             }
         return Optional.empty();
     }
 
-    private Optional<Duration> getTtlMinutesFromHeaderRetryAfter(Header[] responseHeader, String key) {
+    private Optional<TtlInfo> getTtlMinutesFromHeaderRetryAfter(Header[] responseHeader, String key) {
         String retryAfter = getHeaderValue(responseHeader, HttpHeaders.RETRY_AFTER);
             if (retryAfter != null) {
                 if (NumberUtils.isParsable(retryAfter)) {
                     long retrySeconds = Long.parseLong(retryAfter);
-                    return Optional.of(Duration.ofSeconds(retrySeconds));
+                    return Optional.of(new TtlInfo(Duration.ofSeconds(retrySeconds), "RetryAfterSec"));
                 } else {
                     try {
                         TemporalAccessor retryAfterTime = DateTimeFormatter.RFC_1123_DATE_TIME.parse(retryAfter);
                         LocalDateTime localDateTime = LocalDateTime.from(retryAfterTime);
                         Duration duration = Duration.between(LocalDateTime.now(), localDateTime);
-                        return duration.isNegative() ? Optional.empty() : Optional.of(duration);
+                        return duration.isNegative() ? Optional.empty() : Optional.of(new TtlInfo(duration, "RetryAfterTS"));
                     } catch (Exception ignored) {
                         log.warn("Could not parse retry-after: " + retryAfter + " for feed:" + key);
                     }
@@ -247,14 +249,14 @@ public class FeedsDownloadService {
         return Optional.empty();
     }
 
-    private Optional<Duration> getTtlMinutesFromFeed(String responseBody) {
+    private Optional<TtlInfo> getTtlMinutesFromFeed(String responseBody) {
         if(responseBody == null || responseBody.isEmpty()){
             return Optional.empty();
         }
         try {
             WireFeed wireFeed = new WireFeedInput().build(new StringReader(Objects.requireNonNull(responseBody)));
             if (wireFeed instanceof Channel channel && channel.getTtl() > 0) {
-                return Optional.of(Duration.ofMinutes(channel.getTtl()));
+                return Optional.of(new TtlInfo(Duration.ofMinutes(channel.getTtl()), "ttl"));
             }
             if(wireFeed.getForeignMarkup() != null) {
                 var updatePeriod = foreignMarkupValue(wireFeed, "updatePeriod");
@@ -267,10 +269,10 @@ public class FeedsDownloadService {
                         ZonedDateTime dateTime = ZonedDateTime.parse(updateBase, formatter);
                         if(dateTime.isAfter(ZonedDateTime.now())) {
                             var baseDuration = Duration.between(ZonedDateTime.now(), dateTime);
-                            return Optional.of(baseDuration.plus(updateDuration));
+                            return Optional.of(new TtlInfo(baseDuration.plus(updateDuration), "updatePeriod+base"));
                         }
                     }
-                    return Optional.of(updateDuration);
+                    return Optional.of(new TtlInfo(updateDuration, "updatePeriod"));
                 }
 
             }
@@ -309,5 +311,12 @@ public class FeedsDownloadService {
             }
         }
         return null;
+    }
+
+    @Data
+    @AllArgsConstructor
+    private static class TtlInfo{
+        private Duration ttl;
+        private String source;
     }
 }
