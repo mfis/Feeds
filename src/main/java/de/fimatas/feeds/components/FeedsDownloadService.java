@@ -10,7 +10,6 @@ import de.fimatas.feeds.model.TtlInfo;
 import de.fimatas.feeds.util.FeedsUtil;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.extern.apachecommons.CommonsLog;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
@@ -19,11 +18,9 @@ import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.util.Timeout;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -35,15 +32,17 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
 
-@Component
 @CommonsLog
 public class FeedsDownloadService {
 
-    @Autowired
-    private FeedsConfigService feedsConfigService;
+    public FeedsDownloadService(FeedsConfigService feedsConfigService, FeedsProcessingService feedsProcessingService) {
+        this.feedsConfigService = feedsConfigService;
+        this.feedsProcessingService = feedsProcessingService;
+    }
 
-    @Autowired
-    private FeedsProcessingService feedsProcessingService;
+    private final FeedsConfigService feedsConfigService;
+
+    private final FeedsProcessingService feedsProcessingService;
 
     @Value("${downloadTimeoutSeconds}")
     private int downloadTimeoutSeconds;

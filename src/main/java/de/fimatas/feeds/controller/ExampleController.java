@@ -8,7 +8,6 @@ import com.rometools.rome.io.WireFeedOutput;
 import de.fimatas.feeds.util.FeedsUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.apachecommons.CommonsLog;
-import org.jdom2.Element;
 import org.jdom2.Namespace;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;

@@ -4,16 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.fimatas.feeds.model.FeedsConfig;
 import lombok.SneakyThrows;
 import lombok.extern.apachecommons.CommonsLog;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 import java.nio.file.*;
 import java.util.LinkedList;
 import java.util.List;
 
-@Component
 @CommonsLog
 public class FeedsConfigService {
 

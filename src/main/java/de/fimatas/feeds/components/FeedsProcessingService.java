@@ -7,10 +7,8 @@ import com.rometools.rome.io.WireFeedOutput;
 import de.fimatas.feeds.model.FeedsConfig;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.Nullable;
-import org.springframework.stereotype.Component;
 import org.xml.sax.InputSource;
 
 import java.io.*;
@@ -18,11 +16,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-@Component
 public class FeedsProcessingService {
 
-    @Autowired
-    private FeedsConfigService feedsConfigService;
+    public FeedsProcessingService(FeedsConfigService feedsConfigService) {
+        this.feedsConfigService = feedsConfigService;
+    }
+
+    private final FeedsConfigService feedsConfigService;
 
     @Value("${relevantDescriptionLength}")
     private int relevantDescriptionLength;
