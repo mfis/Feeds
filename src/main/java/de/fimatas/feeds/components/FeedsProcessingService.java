@@ -1,10 +1,10 @@
 package de.fimatas.feeds.components;
 
-import com.rometools.rome.feed.synd.SyndEntry;
-import com.rometools.rome.feed.synd.SyndFeed;
-import com.rometools.rome.io.SyndFeedInput;
-import com.rometools.rome.io.SyndFeedOutput;
-import de.fimatas.feeds.model.FeedConfig;
+import com.rometools.rome.feed.rss.Channel;
+import com.rometools.rome.feed.rss.Item;
+import com.rometools.rome.io.WireFeedInput;
+import com.rometools.rome.io.WireFeedOutput;
+import de.fimatas.feeds.model.FeedsConfig;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,45 +31,44 @@ public class FeedsProcessingService {
     private String externalURL;
 
     @SneakyThrows
-    public String processFeed(@Nullable String originalFeed, FeedConfig feedConfig){
+    public String processFeed(@Nullable String originalFeed, FeedsConfig.FeedConfig feedConfig){
 
         if(originalFeed == null){
             return null;
         }
 
-        SyndFeed syndFeed = new SyndFeedInput()
-                .build(new InputSource(new ByteArrayInputStream(originalFeed.getBytes(StandardCharsets.UTF_8))));
+        Channel channel = (Channel) new WireFeedInput().build(new InputSource(new ByteArrayInputStream(originalFeed.getBytes(StandardCharsets.UTF_8))));
 
-        var originalLink = syndFeed.getLink();
-        var originalDescription = syndFeed.getDescription();
-        syndFeed.setLink(externalURL + "/api/feeds/" + feedConfig.getKey());
-        syndFeed.setDescription("FILTERED FEED. ORIGINAL LINK = '" + originalLink + "'. ORIGINAL DESCRIPTION = '" + originalDescription + "'.");
+        var originalLink = channel.getLink();
+        var originalDescription = channel.getDescription();
+        channel.setLink(externalURL + "/api/feeds/" + feedConfig.getKey());
+        channel.setDescription("FILTERED FEED. ORIGINAL LINK = '" + originalLink + "'. ORIGINAL DESCRIPTION = '" + originalDescription + "'.");
 
-        List<SyndEntry> filteredEntries = processEntries(syndFeed.getEntries(), feedConfig);
-        syndFeed.setEntries(filteredEntries);
+        List<Item> filteredEntries = processEntries(channel.getItems(), feedConfig);
+        channel.setItems(filteredEntries);
 
-        SyndFeedOutput output = new SyndFeedOutput();
+        WireFeedOutput output = new WireFeedOutput();
         try (StringWriter writer = new StringWriter()) {
-            output.output(syndFeed, writer);
+            output.output(channel, writer);
             return writer.toString();
         }
     }
 
-    private List<SyndEntry> processEntries(List<SyndEntry> entries, FeedConfig feedConfig) {
+    private List<Item> processEntries(List<Item> entries, FeedsConfig.FeedConfig feedConfig) {
 
-        List<SyndEntry> processedEntries = new ArrayList<>();
+        List<Item> processedEntries = new ArrayList<>();
         var excludes = feedsConfigService.getExcludesForFeedConfig(feedConfig);
         var includes = feedsConfigService.getIncludesForFeedConfig(feedConfig);
 
-        for (SyndEntry entry : entries) {
-            String relevantContent = entry.getTitle() + StringUtils.SPACE + StringUtils.left(entry.getDescription().getValue(), relevantDescriptionLength);
+        for (Item item : entries) {
+            String relevantContent = item.getTitle() + StringUtils.SPACE + StringUtils.left(item.getDescription().getValue(), relevantDescriptionLength);
             if(!excludes.isEmpty() && excludes.stream().anyMatch(excludeString -> StringUtils.containsIgnoreCase(relevantContent, excludeString))){
                 continue; // delete
             }
             if(!includes.isEmpty() && includes.stream().noneMatch(includeString -> StringUtils.containsIgnoreCase(relevantContent, includeString))){
                 continue; // delete
             }
-            processedEntries.add(entry);
+            processedEntries.add(item);
         }
         return processedEntries;
     }

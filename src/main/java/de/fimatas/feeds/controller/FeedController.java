@@ -1,8 +1,7 @@
 package de.fimatas.feeds.controller;
 
 import de.fimatas.feeds.components.FeedsConfigService;
-import de.fimatas.feeds.components.FeedsDownloadService;
-import de.fimatas.feeds.model.FeedCacheEntry;
+import de.fimatas.feeds.model.FeedsCache;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.apachecommons.CommonsLog;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,26 +18,19 @@ import java.io.IOException;
 @CommonsLog
 public class FeedController {
 
-    @Autowired
-    private FeedsDownloadService feedsDownloadService;
-
-    @Autowired
-    private FeedsConfigService feedsConfigService;
-
     @GetMapping("/{key}")
     @ResponseBody
     public void getFeed(@PathVariable String key, HttpServletResponse response) throws IOException {
 
-        if(!feedsConfigService.isValidKey(key)){
+        final FeedsCache.FeedCacheEntry feedCacheEntry = FeedsCache.getInstance().lookupFeed(key);
+        if(feedCacheEntry == null){
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            log.info("getFeed " + key + " NOT_FOUND");
+            log.info("getFeed '" + key + "' NOT_FOUND");
             return;
         }
-
-        final FeedCacheEntry feedCacheEntry = feedsDownloadService.getFeedCacheEntry(key);
-        if(feedCacheEntry == null || !feedCacheEntry.hasActualContent()){
+        if(!feedCacheEntry.hasActualContent()){
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-            log.info("getFeed " + key + " SERVICE_UNAVAILABLE");
+            log.info("getFeed '" + key + "' SERVICE_UNAVAILABLE");
             return;
         }
 
@@ -48,7 +40,7 @@ public class FeedController {
         response.getWriter().print(feedCacheEntry.getContent());
     }
 
-    private static String buildLastModifiedHeaderField(FeedCacheEntry feedCacheEntry) {
+    private static String buildLastModifiedHeaderField(FeedsCache.FeedCacheEntry feedCacheEntry) {
         if(feedCacheEntry.getHeaderLastModified() != null){
             return feedCacheEntry.getHeaderLastModified();
         }else{
@@ -56,7 +48,7 @@ public class FeedController {
         }
     }
 
-    private static String buildContentTypeHeaderField(FeedCacheEntry feedCacheEntry) {
+    private static String buildContentTypeHeaderField(FeedsCache.FeedCacheEntry feedCacheEntry) {
         if(feedCacheEntry.getHeaderContentType() != null){
                 return feedCacheEntry.getHeaderContentType();
         }else{

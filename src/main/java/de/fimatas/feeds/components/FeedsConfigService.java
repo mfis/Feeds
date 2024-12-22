@@ -1,7 +1,6 @@
 package de.fimatas.feeds.components;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import de.fimatas.feeds.model.FeedConfig;
 import de.fimatas.feeds.model.FeedsConfig;
 import lombok.SneakyThrows;
 import lombok.extern.apachecommons.CommonsLog;
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Component;
 import java.nio.file.*;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 @CommonsLog
@@ -32,13 +30,6 @@ public class FeedsConfigService {
 
     private long lastKnownFileDateModified = 0;
 
-    public boolean isValidKey(String key){
-        if(StringUtils.isBlank(key)){
-            return false;
-        }
-        return getFeedsConfigList().stream().anyMatch(feedConfig -> feedConfig.getKey().equals(key));
-    }
-
     @Scheduled(initialDelay = 1, fixedDelay = listenerInterval)
     private void startConfigFileListener() {
         if(lastKnownFileDateModified != lookupPath().toFile().lastModified()){
@@ -48,20 +39,20 @@ public class FeedsConfigService {
         }
     }
 
-    public List<FeedConfig> getFeedsConfigList(){
+    public List<FeedsConfig.FeedsGroup> getFeedsGroups(){
         if(feedsConfig == null){
             readFeedsConfig();
         }
-        return feedsConfig.getFeeds();
+        return feedsConfig.getGroups();
     }
 
-    public List<String> getIncludesForFeedConfig(FeedConfig feedConfig){
+    public List<String> getIncludesForFeedConfig(FeedsConfig.FeedConfig feedConfig){
         final List<String> allStrings = new LinkedList<>();
         feedConfig.getIncludeRefs().forEach(in -> resolveList(in, allStrings));
         return allStrings;
     }
 
-    public List<String> getExcludesForFeedConfig(FeedConfig feedConfig){
+    public List<String> getExcludesForFeedConfig(FeedsConfig.FeedConfig feedConfig){
         final List<String> allStrings = new LinkedList<>();
         feedConfig.getExcludeRefs().forEach(in -> resolveList(in, allStrings));
         return allStrings;
@@ -78,7 +69,10 @@ public class FeedsConfigService {
     @SneakyThrows
     private void readFeedsConfig() {
         var localFeedsConfig = objectMapper.readValue(lookupPath().toFile(), FeedsConfig.class);
-        localFeedsConfig.setFeeds(localFeedsConfig.getFeeds().stream().filter(FeedConfig::isActive).collect(Collectors.toList()));
+        localFeedsConfig.getGroups().forEach(g -> {
+            var groupFeeds = g.getGroupFeeds().stream().filter(FeedsConfig.FeedConfig::isActive).toList();
+            g.setGroupFeeds(groupFeeds);
+        });
         feedsConfig = localFeedsConfig;
     }
 

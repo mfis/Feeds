@@ -5,6 +5,7 @@ import com.rometools.rome.feed.rss.Description;
 import com.rometools.rome.feed.rss.Item;
 import com.rometools.rome.io.FeedException;
 import com.rometools.rome.io.WireFeedOutput;
+import de.fimatas.feeds.util.FeedsUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.apachecommons.CommonsLog;
 import org.jdom2.Element;
@@ -47,15 +48,15 @@ public class ExampleController {
 
         if(key.equals("example_F")){
             Namespace syNamespace = Namespace.getNamespace("sy", "http://localhost");
-            channel.getForeignMarkup().add(createSyModuleElement("updatePeriod", "hourly", syNamespace));
-            channel.getForeignMarkup().add(createSyModuleElement("updateFrequency", "2", syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updatePeriod", "hourly", syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updateFrequency", "2", syNamespace));
         }
 
         if(key.equals("example_G")){
             Namespace syNamespace = Namespace.getNamespace("sy", "http://localhost");
-            channel.getForeignMarkup().add(createSyModuleElement("updatePeriod", "hourly", syNamespace));
-            channel.getForeignMarkup().add(createSyModuleElement("updateFrequency", "2", syNamespace));
-            channel.getForeignMarkup().add(createSyModuleElement("updateBase", DateTimeFormatter.ISO_DATE_TIME.format(ZonedDateTime.now().plusMinutes(10)), syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updatePeriod", "hourly", syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updateFrequency", "2", syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updateBase", DateTimeFormatter.ISO_DATE_TIME.format(ZonedDateTime.now().plusMinutes(10)), syNamespace));
         }
 
         channel.setFeedType("rss_2.0");
@@ -64,7 +65,7 @@ public class ExampleController {
         channel.setLink("http://localhost:8081/example");
 
         Item entry1 = new Item();
-        entry1.setTitle("Example title 1");
+        entry1.setTitle("Example title 1 - " + key);
         entry1.setLink("https://localhost:8081/example/entry/1");
         entry1.setPubDate(new Date());
         var content1 = new Description();
@@ -72,7 +73,7 @@ public class ExampleController {
         entry1.setDescription(content1);
 
         Item entry2 = new Item();
-        entry2.setTitle("Example title 2");
+        entry2.setTitle("Example title 2 - " + key);
         entry2.setLink("https://localhost:8081/example/entry/2");
         entry2.setPubDate(new Date());
         var content2 = new Description();
@@ -98,9 +99,4 @@ public class ExampleController {
         return "--unknown--";
     }
 
-    private static Element createSyModuleElement(String name, String value, Namespace namespace) {
-        Element element = new Element(name, namespace);
-        element.setText(value);
-        return element;
-    }
 }

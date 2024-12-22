@@ -4,9 +4,10 @@ import com.rometools.rome.feed.WireFeed;
 import com.rometools.rome.feed.rss.Channel;
 import com.rometools.rome.io.FeedException;
 import com.rometools.rome.io.WireFeedInput;
-import de.fimatas.feeds.model.FeedCacheEntry;
-import de.fimatas.feeds.model.FeedConfig;
+import de.fimatas.feeds.model.FeedsCache;
+import de.fimatas.feeds.model.FeedsConfig;
 import de.fimatas.feeds.model.TtlInfo;
+import de.fimatas.feeds.util.FeedsUtil;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.lang3.StringUtils;
@@ -47,79 +48,71 @@ public class FeedsDownloadService {
     @Value("${downloadTimeoutSeconds}")
     private int downloadTimeoutSeconds;
 
-    @Value("${defaultRefreshDurationMinutes}")
-    private int defaultRefreshDurationMinutes;
-
     private final LocalTime dailyStartTime = LocalTime.of(5, 20);
     private final LocalTime dailyEndTime = LocalTime.of(22, 30);
 
-    private Map<String, FeedCacheEntry> cache = new HashMap<>();
-
     private final FeedsDownloadCircuitBreaker feedsDownloadCircuitBreaker = new FeedsDownloadCircuitBreaker();
-
-    private LocalDateTime lastRefreshMethodCall = null;
-
-    public FeedCacheEntry getFeedCacheEntry(String key){
-        if(StringUtils.isEmpty(key)){
-            return null;
-        }
-        return cache.get(key);
-    }
 
     @Scheduled(initialDelay = 1000 * 2, fixedDelay = 1000 * 60 * 3)
     private void refreshScheduler() {
-        refresh();
+        feedsConfigService.getFeedsGroups().forEach(this::refresh);
     }
 
-    private void refresh() {
+    private void refresh(FeedsConfig.FeedsGroup groupConfig) {
 
         LocalTime now = LocalTime.now();
         if (now.isBefore(dailyStartTime)) {
-            log.info("daily start time not reached");
+            log.info("group '" + groupConfig.getGroupId() + "' daily start time not reached");
             return;
         }
         if (now.isAfter(dailyEndTime)) {
-            log.info("daily end time reached");
+            log.info("group '" + groupConfig.getGroupId() + "' daily end time reached");
             return;
         }
 
+        var groupCache = FeedsCache.getInstance().lookupGroup(groupConfig.getGroupId());
+        if (groupCache == null) {
+            groupCache = FeedsCache.getInstance().defineGroup(groupConfig.getGroupId());
+        }
+
         // check interval against cache
-        if(!cache.isEmpty()){
-            var delayMinutes = getDelayMinutes();
-            var maxLastRefresh = cache.values().stream().map(FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
+        if(!groupCache.getGroupFeeds().isEmpty()){
+            var delayMinutes = getDelayMinutes(groupConfig);
+            var maxLastRefresh = groupCache.getGroupFeeds().values().stream().map(FeedsCache.FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
             var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, LocalDateTime.now());
             if(maxDurationSinceLastRefresh.compareTo(Duration.ofMinutes(delayMinutes)) < 1){
-                log.warn("skipping refresh (cache): " + maxDurationSinceLastRefresh + " / " + delayMinutes);
+                log.warn("group '" + groupConfig.getGroupId() + "' skipping refresh (cache): " + maxDurationSinceLastRefresh + " / " + delayMinutes);
                 return;
             }
         }
 
         // check interval against method call
-        if(lastRefreshMethodCall != null &&
-                Duration.between(lastRefreshMethodCall, LocalDateTime.now()).toMinutes() < defaultRefreshDurationMinutes){
-            log.warn("skipping refresh (method call): " + lastRefreshMethodCall);
+        if(groupCache.getLastRefreshMethodCall() != null &&
+                Duration.between(groupCache.getLastRefreshMethodCall(), LocalDateTime.now()).toMinutes() < groupConfig.getGroupDefaultDurationMinutes()){
+            log.warn("group '" + groupConfig.getGroupId() + "' skipping refresh (method call): " + groupCache.getLastRefreshMethodCall());
             return;
         }
 
         // finally refresh
-        lastRefreshMethodCall = LocalDateTime.now();
-        Map<String, FeedCacheEntry> refreshedCache = new HashMap<>();
-        for(var feedConfig : feedsConfigService.getFeedsConfigList()){
+        groupCache.setLastRefreshMethodCall(LocalDateTime.now());
+        Map<String, FeedsCache.FeedCacheEntry> refreshedCache = new HashMap<>();
+        for(FeedsConfig.FeedConfig feedConfig : groupConfig.getGroupFeeds()){
             var decoratedRunnable = CircuitBreaker.decorateRunnable(feedsDownloadCircuitBreaker.getCircuitBreaker(feedConfig),
-                   () -> refreshFeed(feedConfig, refreshedCache));
+                   () -> refreshFeed(groupConfig, feedConfig, refreshedCache));
             try {
                 decoratedRunnable.run();
             } catch (Exception e) {
-                fallback(feedConfig, e, refreshedCache);
+                fallback(groupConfig, feedConfig, e, refreshedCache);
             }
         }
-        cache = refreshedCache;
 
-        log.info("new overall delay: " + getDelayMinutes() + " minutes (default: " +
-                defaultRefreshDurationMinutes + ") - next refresh: " + (LocalTime.now().plusMinutes(getDelayMinutes())).toString());
+        FeedsCache.getInstance().updateGroupFeeds(groupCache, refreshedCache);
+
+        log.info("group '" + groupConfig.getGroupId() + "' new overall delay: " + getDelayMinutes(groupConfig) + " minutes (default: " +
+                groupConfig.getGroupDefaultDurationMinutes() + ") - next refresh: " + (LocalTime.now().plusMinutes(getDelayMinutes(groupConfig))).toString());
     }
 
-    private void refreshFeed(FeedConfig feedConfig, Map<String, FeedCacheEntry> refreshedCache) {
+    private void refreshFeed(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
 
         RequestConfig requestConfig = RequestConfig.custom()
                 .setResponseTimeout(Timeout.ofSeconds(downloadTimeoutSeconds))
@@ -139,7 +132,7 @@ public class FeedsDownloadService {
                 }
                 String responseBody = EntityUtils.toString(response.getEntity());
                 String processedFeed = feedsProcessingService.processFeed(responseBody, feedConfig);
-                handleRefreshSuccess(feedConfig, processedFeed, response.getHeaders(), responseBody, refreshedCache);
+                handleRefreshSuccess(groupConfig, feedConfig, processedFeed, response.getHeaders(), responseBody, refreshedCache);
                 return responseBody;
             });
 
@@ -148,28 +141,29 @@ public class FeedsDownloadService {
         }
     }
 
-    private void fallback(FeedConfig feedConfig, Exception e, Map<String, FeedCacheEntry> refreshedCache) {
+    private void fallback(FeedsConfig.FeedsGroup groupConfig,  FeedsConfig.FeedConfig feedConfig, Exception e, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
         log.info("FALLBACK: " + feedConfig.getName() + ": " + e.getMessage());
-        handleRefreshError(feedConfig, refreshedCache);
+        handleRefreshError(groupConfig, feedConfig, refreshedCache);
     }
 
-    private void handleRefreshSuccess(FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedCacheEntry> refreshedCache){
-        var ttl = newEmptyFeedCacheEntry(feedConfig, feed, responseHeader, responseBody, refreshedCache);
+    private void handleRefreshSuccess(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedsCache.FeedCacheEntry> refreshedCache){
+        var ttl = newEmptyFeedCacheEntry(groupConfig, feedConfig, feed, responseHeader, responseBody, refreshedCache);
         log.info("refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.map(t -> t.getTtl().toMinutes() + " min (" + t.getSource() + ")").orElse("n/a")));
     }
 
-    private void handleRefreshError(FeedConfig feedConfig, Map<String, FeedCacheEntry> refreshedCache){
-        if(cache.containsKey(feedConfig.getKey())){
-           refreshedCache.put(feedConfig.getKey(), cache.get(feedConfig.getKey()));
+    private void handleRefreshError(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, Map<String, FeedsCache.FeedCacheEntry> refreshedCache){
+        var groupCache = FeedsCache.getInstance().lookupGroup(groupConfig.getGroupId());
+        if(groupCache.getGroupFeeds().containsKey(feedConfig.getKey())){
+           refreshedCache.put(feedConfig.getKey(), groupCache.getGroupFeeds().get(feedConfig.getKey()));
         }else{
-            newEmptyFeedCacheEntry(feedConfig, null, null, null, refreshedCache);
+            newEmptyFeedCacheEntry(groupConfig, feedConfig, null, null, null, refreshedCache);
         }
         refreshedCache.get(feedConfig.getKey()).increaseRefreshErrorCounter();
     }
 
-    private Optional<TtlInfo> newEmptyFeedCacheEntry(FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedCacheEntry> refreshedCache) {
-        var ttl = getTtlMinutes(responseHeader, responseBody, feedConfig.getKey());
-        FeedCacheEntry feedCacheEntry = new FeedCacheEntry();
+    private Optional<TtlInfo> newEmptyFeedCacheEntry(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
+        var ttl = getTtlMinutes(groupConfig, responseHeader, responseBody, feedConfig.getKey());
+        FeedsCache.FeedCacheEntry feedCacheEntry = new FeedsCache.FeedCacheEntry();
         feedCacheEntry.setKey(feedConfig.getKey());
         feedCacheEntry.setLastRefresh(LocalDateTime.now());
         feedCacheEntry.setRefreshErrorCounter(0);
@@ -181,12 +175,12 @@ public class FeedsDownloadService {
         return ttl;
     }
 
-    private Optional<TtlInfo> getTtlMinutes(Header[] responseHeader, String responseBody, String key) {
+    private Optional<TtlInfo> getTtlMinutes(FeedsConfig.FeedsGroup groupConfig, Header[] responseHeader, String responseBody, String key) {
         var optionals = List.of(
                 getTtlMinutesFromHeaderMaxAge(responseHeader),
                 getTtlMinutesFromHeaderRetryAfter(responseHeader, key),
                 getTtlMinutesFromFeed(responseBody),
-                Optional.of(new TtlInfo(Duration.ofMinutes(defaultRefreshDurationMinutes), "default")));
+                Optional.of(new TtlInfo(Duration.ofMinutes(groupConfig.getGroupDefaultDurationMinutes()), "default")));
         return optionals.stream().filter(Optional::isPresent).map(Optional::get).max(Comparator.comparing(TtlInfo::getTtl));
     }
 
@@ -232,9 +226,9 @@ public class FeedsDownloadService {
                 return Optional.of(new TtlInfo(Duration.ofMinutes(channel.getTtl()), "ttl"));
             }
             if(wireFeed.getForeignMarkup() != null) {
-                var updatePeriod = foreignMarkupValue(wireFeed, "updatePeriod");
-                var updateFrequency =foreignMarkupValue(wireFeed, "updateFrequency");
-                var updateBase = foreignMarkupValue(wireFeed, "updateBase");
+                var updatePeriod = FeedsUtil.getForeignMarkupValue(wireFeed, "updatePeriod");
+                var updateFrequency =FeedsUtil.getForeignMarkupValue(wireFeed, "updateFrequency");
+                var updateBase = FeedsUtil.getForeignMarkupValue(wireFeed, "updateBase");
                 if(updatePeriod != null && updateFrequency != null) {
                     var updateDuration = Duration.ofMinutes(getPeriodMinutes(updatePeriod) / Long.parseLong(updateFrequency));
                     if(updateBase != null) {
@@ -266,12 +260,9 @@ public class FeedsDownloadService {
         };
     }
 
-    private static String foreignMarkupValue(WireFeed wireFeed, String name) {
-        return wireFeed.getForeignMarkup().stream().filter(fm -> fm.getName().equals(name)).findFirst().map(e -> StringUtils.trimToNull(e.getValue())).orElse(null);
-    }
-
-    private long getDelayMinutes() {
-        return cache.values().stream().map(FeedCacheEntry::getTtl).max(Comparator.comparing(TtlInfo::getTtl))
+    private long getDelayMinutes(FeedsConfig.FeedsGroup groupConfig) {
+        var groupCache = FeedsCache.getInstance().lookupGroup(groupConfig.getGroupId());
+        return groupCache.getGroupFeeds().values().stream().map(FeedsCache.FeedCacheEntry::getTtl).max(Comparator.comparing(TtlInfo::getTtl))
                 .map(t -> t.getTtl().toMinutes()).orElseThrow();
     }
 

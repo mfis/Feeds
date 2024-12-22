@@ -1,6 +1,6 @@
 package de.fimatas.feeds.components;
 
-import de.fimatas.feeds.model.FeedConfig;
+import de.fimatas.feeds.model.FeedsConfig;
 import io.github.resilience4j.circuitbreaker.*;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -26,7 +26,7 @@ public class FeedsDownloadCircuitBreaker {
         this.circuitBreakerRegistry = CircuitBreakerRegistry.of(defaultConfig);
     }
 
-    public CircuitBreaker getCircuitBreaker(FeedConfig feedConfig) {
+    public CircuitBreaker getCircuitBreaker(FeedsConfig.FeedConfig feedConfig) {
         return circuitBreakerMap.computeIfAbsent(feedConfig.getKey(),
                 key -> circuitBreakerRegistry.circuitBreaker("FeedsDownloadCircuitBreaker-" + key));
     }
