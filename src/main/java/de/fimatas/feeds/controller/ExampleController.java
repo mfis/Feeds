@@ -27,6 +27,11 @@ public class ExampleController {
     public void getDataFromExternalApi(HttpServletResponse response,
                                        @RequestParam(name = "key", required = false) String key) throws IOException, FeedException {
 
+        if(key.equals("example_X")){
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
         Channel channel = new Channel();
 
         if(key.equals("example_A")){
