@@ -62,11 +62,11 @@ public class FeedsDownloadService {
 
         LocalTime now = LocalTime.now();
         if (now.isBefore(dailyStartTime)) {
-            log.info("group '" + groupConfig.getGroupId() + "' daily start time not reached");
+            log.debug("group '" + groupConfig.getGroupId() + "' daily start time not reached");
             return;
         }
         if (now.isAfter(dailyEndTime)) {
-            log.info("group '" + groupConfig.getGroupId() + "' daily end time reached");
+            log.debug("group '" + groupConfig.getGroupId() + "' daily end time reached");
             return;
         }
 
@@ -81,7 +81,7 @@ public class FeedsDownloadService {
             var maxLastRefresh = groupCache.getGroupFeeds().values().stream().map(FeedsCache.FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
             var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, LocalDateTime.now());
             if(maxDurationSinceLastRefresh.compareTo(Duration.ofMinutes(delayMinutes)) < 1){
-                log.warn("group '" + groupConfig.getGroupId() + "' skipping refresh (cache): " + maxDurationSinceLastRefresh + " / " + delayMinutes);
+                log.debug("group '" + groupConfig.getGroupId() + "' skipping refresh (cache): " + maxDurationSinceLastRefresh + " / " + delayMinutes);
                 return;
             }
         }
@@ -89,7 +89,7 @@ public class FeedsDownloadService {
         // check interval against method call
         if(groupCache.getLastRefreshMethodCall() != null &&
                 Duration.between(groupCache.getLastRefreshMethodCall(), LocalDateTime.now()).toMinutes() < groupConfig.getGroupDefaultDurationMinutes()){
-            log.warn("group '" + groupConfig.getGroupId() + "' skipping refresh (method call): " + groupCache.getLastRefreshMethodCall());
+            log.debug("group '" + groupConfig.getGroupId() + "' skipping refresh (method call): " + groupCache.getLastRefreshMethodCall());
             return;
         }
 
@@ -143,13 +143,13 @@ public class FeedsDownloadService {
     }
 
     private void fallback(FeedsConfig.FeedsGroup groupConfig,  FeedsConfig.FeedConfig feedConfig, Exception e, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
-        log.info("refreshFeed FALLBACK: " + feedConfig.getName() + ": " + e.getMessage());
+        log.info("-> refreshFeed FALLBACK: " + feedConfig.getName() + ": " + e.getMessage());
         handleRefreshError(groupConfig, feedConfig, refreshedCache);
     }
 
     private void handleRefreshSuccess(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedsCache.FeedCacheEntry> refreshedCache){
         var ttl = newEmptyFeedCacheEntry(groupConfig, feedConfig, feed, responseHeader, responseBody, refreshedCache);
-        log.info("refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.getTtl().toMinutes() + " min (" + ttl.getSource() + ")"));
+        log.info("-> refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.getTtl().toMinutes() + " min (" + ttl.getSource() + ")"));
     }
 
     private void handleRefreshError(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, Map<String, FeedsCache.FeedCacheEntry> refreshedCache){
