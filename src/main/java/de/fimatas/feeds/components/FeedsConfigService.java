@@ -55,6 +55,10 @@ public class FeedsConfigService {
         return allStrings;
     }
 
+    public boolean isLogStackTrace(){
+        return feedsConfig.isLogStackTrace();
+    }
+
     private void resolveList(String in, List<String> allStrings) {
         feedsConfig.getLists().forEach(l -> l.keySet().forEach(k -> {
             if(k.equalsIgnoreCase(in)){

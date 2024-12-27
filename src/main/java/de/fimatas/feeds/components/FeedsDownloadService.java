@@ -143,7 +143,12 @@ public class FeedsDownloadService {
     }
 
     private void fallback(FeedsConfig.FeedsGroup groupConfig,  FeedsConfig.FeedConfig feedConfig, Exception e, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
-        log.info("-> refreshFeed FALLBACK: " + feedConfig.getName() + ": " + e.getMessage());
+        var msg = "-> refreshFeed FALLBACK: " + feedConfig.getName() + ": " + e.getMessage();
+        if(feedsConfigService.isLogStackTrace()){
+            log.warn(msg, e);
+        }else{
+            log.warn(msg);
+        }
         handleRefreshError(groupConfig, feedConfig, refreshedCache);
     }
 
