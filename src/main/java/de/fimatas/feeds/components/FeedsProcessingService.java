@@ -61,7 +61,12 @@ public class FeedsProcessingService {
         var includes = feedsConfigService.getIncludesForFeedConfig(feedConfig);
 
         for (Item item : entries) {
-            String relevantContent = item.getTitle() + StringUtils.SPACE + StringUtils.left(item.getDescription().getValue(), relevantDescriptionLength);
+            String relevantContent;
+                 relevantContent = StringUtils.trimToEmpty(
+                         StringUtils.trimToEmpty(item.getTitle()) +
+                         StringUtils.SPACE +
+                         StringUtils.trimToEmpty(item.getDescription() == null ? null : StringUtils.left(item.getDescription().getValue(), relevantDescriptionLength))
+                 );
             if(!excludes.isEmpty() && excludes.stream().anyMatch(excludeString -> StringUtils.containsIgnoreCase(relevantContent, excludeString))){
                 continue; // delete
             }

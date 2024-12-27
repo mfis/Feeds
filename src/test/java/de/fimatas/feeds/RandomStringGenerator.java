@@ -4,7 +4,7 @@ import java.util.Random;
 
 public class RandomStringGenerator {
     public static void main(String[] args) {
-        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!/()*,.-";
+        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!()*,.-";
         int length = 70;
 
         StringBuilder randomString = new StringBuilder();
