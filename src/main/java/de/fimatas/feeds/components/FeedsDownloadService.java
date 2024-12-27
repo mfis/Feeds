@@ -163,7 +163,7 @@ public class FeedsDownloadService {
     }
 
     private TtlInfo newEmptyFeedCacheEntry(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
-        var ttl = getTtlMinutes(groupConfig, responseHeader, responseBody, feedConfig.getKey());
+        var ttl = getTtlMinutes(responseHeader, responseBody, feedConfig.getKey());
         FeedsCache.FeedCacheEntry feedCacheEntry = new FeedsCache.FeedCacheEntry();
         feedCacheEntry.setKey(feedConfig.getKey());
         feedCacheEntry.setLastRefresh(LocalDateTime.now());
@@ -176,7 +176,7 @@ public class FeedsDownloadService {
         return feedCacheEntry.getTtl();
     }
 
-    private Optional<TtlInfo> getTtlMinutes(FeedsConfig.FeedsGroup groupConfig, Header[] responseHeader, String responseBody, String key) {
+    private Optional<TtlInfo> getTtlMinutes(Header[] responseHeader, String responseBody, String key) {
         var optionals = List.of(
                 getTtlMinutesFromHeaderMaxAge(responseHeader),
                 getTtlMinutesFromHeaderRetryAfter(responseHeader, key),
