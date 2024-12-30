@@ -23,7 +23,7 @@ public class FeedsConfigService {
 
     private FeedsConfig feedsConfig;
 
-    private static final long listenerInterval = 500L;
+    private static final long listenerInterval = 15_000L;
 
     private long lastKnownFileDateModified = 0;
 
@@ -83,4 +83,5 @@ public class FeedsConfigService {
         }
         return path;
     }
+    
 }
