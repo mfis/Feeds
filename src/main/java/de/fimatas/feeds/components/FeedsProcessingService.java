@@ -27,9 +27,6 @@ public class FeedsProcessingService {
     @Value("${relevantDescriptionLength}")
     private int relevantDescriptionLength;
 
-    @Value("${externalURL}")
-    private String externalURL;
-
     @SneakyThrows
     public String processFeed(@Nullable String originalFeed, FeedsConfig.FeedConfig feedConfig){
 
@@ -41,7 +38,7 @@ public class FeedsProcessingService {
 
         var originalLink = channel.getLink();
         var originalDescription = channel.getDescription();
-        channel.setLink(externalURL + "/api/feeds/" + feedConfig.getKey());
+        channel.setLink(feedsConfigService.getExternalURL() + "/api/feeds/" + feedConfig.getKey());
         channel.setDescription("FILTERED FEED. ORIGINAL LINK = '" + originalLink + "'. ORIGINAL DESCRIPTION = '" + originalDescription + "'.");
 
         List<Item> filteredEntries = processEntries(channel.getItems(), feedConfig);

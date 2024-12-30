@@ -2,11 +2,15 @@ package de.fimatas.feeds.components;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.fimatas.feeds.model.FeedsConfig;
+import jakarta.annotation.PostConstruct;
 import lombok.SneakyThrows;
 import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.io.FileUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.LinkedList;
 import java.util.List;
@@ -14,23 +18,26 @@ import java.util.List;
 @CommonsLog
 public class FeedsConfigService {
 
-    @Value("${config}")
-    private String configFile;
+    @Value("${useTestConfig:true}")
+    private boolean useTestConfig;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    private Path path;
 
     private FeedsConfig feedsConfig;
 
     private static final long listenerInterval = 15_000L;
 
-    private long lastKnownFileDateModified = 0;
+    private long lastKnownFileDateModified = -1;
+
+    @PostConstruct
+    private void init() {
+        log.info("useTestConfig=" + useTestConfig);
+    }
 
     @Scheduled(initialDelay = 1, fixedDelay = listenerInterval)
     private void startConfigFileListener() {
-        if(lastKnownFileDateModified != lookupPath().toFile().lastModified()){
-            lastKnownFileDateModified = lookupPath().toFile().lastModified();
+        if(lastKnownFileDateModified != lookupConfigJsonLastModified()){
+            lastKnownFileDateModified = lookupConfigJsonLastModified();
             log.info("refreshing config");
             readFeedsConfig();
         }
@@ -59,6 +66,10 @@ public class FeedsConfigService {
         return feedsConfig.isLogStackTrace();
     }
 
+    public String getExternalURL(){
+        return feedsConfig.getExternalURL();
+    }
+
     private void resolveList(String in, List<String> allStrings) {
         feedsConfig.getLists().forEach(l -> l.keySet().forEach(k -> {
             if(k.equalsIgnoreCase(in)){
@@ -69,7 +80,7 @@ public class FeedsConfigService {
 
     @SneakyThrows
     private void readFeedsConfig() {
-        var localFeedsConfig = objectMapper.readValue(lookupPath().toFile(), FeedsConfig.class);
+        var localFeedsConfig = objectMapper.readValue(lookupConfigJsonDocument(), FeedsConfig.class);
         localFeedsConfig.getGroups().forEach(g -> {
             var groupFeeds = g.getGroupFeeds().stream().filter(FeedsConfig.FeedConfig::isActive).toList();
             g.setGroupFeeds(groupFeeds);
@@ -77,11 +88,30 @@ public class FeedsConfigService {
         feedsConfig = localFeedsConfig;
     }
 
-    private Path lookupPath() {
-        if(path == null){
-            path = Path.of(System.getProperty("user.home") + "/Documents/config/feeds/" + configFile);
+    private String lookupConfigJsonDocument() {
+        try {
+            if (useTestConfig) {
+                try (var inputStream = FeedsConfigService.class.getClassLoader().getResourceAsStream("testFeeds.json")) {
+                    assert inputStream != null;
+                    return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            } else {
+                return FileUtils.readFileToString(lookupConfigJsonFile(), StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("configJsonFile not readable!", e);
         }
-        return path;
     }
-    
+
+    private long lookupConfigJsonLastModified() {
+        if(useTestConfig){
+            return 0;
+        }else{
+            return lookupConfigJsonFile().lastModified();
+        }
+    }
+
+    private File lookupConfigJsonFile(){
+        return Path.of(System.getProperty("user.home") + "/Documents/config/feeds/feeds.json").toFile();
+    }
 }

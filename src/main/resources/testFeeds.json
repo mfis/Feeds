@@ -1,0 +1,106 @@
+{
+	"logStackTrace": false,
+	"externalURL": "http://localhost",
+	"groups": [
+		{
+			"groupId": "ExampleGroup1",
+			"groupDefaultDurationMinutes": 100,
+			"groupFeeds": [
+				{
+					"name": "example G1A",
+					"key": "example_G1A",
+					"url": "http://localhost:8081/example?key=example_A",
+					"includeRefs": [null],
+					"excludeRefs": [null],
+					"active": true
+				},
+				{
+					"name": "example G1B",
+					"key": "example_G1B",
+					"url": "http://localhost:8081/example?key=example_B",
+					"includeRefs": ["all"],
+					"excludeRefs": ["not"],
+					"active": true
+				},
+				{
+					"name": "example G1C",
+					"key": "example_G1C",
+					"url": "http://localhost:8081/example?key=example_C",
+					"includeRefs": ["con1"],
+					"excludeRefs": [null],
+					"active": true
+				},
+				{
+					"name": "example G1X",
+					"key": "example_G1X",
+					"url": "http://localhost:8081/example?key=example_X",
+					"includeRefs": ["con1"],
+					"excludeRefs": [null],
+					"active": true
+				}				
+			]
+		},
+		{
+			"groupId": "ExampleGroup2",
+			"groupDefaultDurationMinutes": 20,
+			"groupFeeds": [
+				{
+					"name": "example G2D",
+					"key": "example_G2D",
+					"url": "http://localhost:8081/example?key=example_D",
+					"includeRefs": [null],
+					"excludeRefs": [null],
+					"active": true
+				},
+				{
+					"name": "example G2E",
+					"key": "example_G2E",
+					"url": "http://localhost:8081/example?key=example_E",
+					"includeRefs": [null],
+					"excludeRefs": ["con2"],
+					"active": true
+				},
+				{
+					"name": "example G2F",
+					"key": "example_G2F",
+					"url": "http://localhost:8081/example?key=example_F",
+					"includeRefs": [null],
+					"excludeRefs": ["con2"],
+					"active": true
+				},
+				{
+					"name": "example G2G",
+					"key": "example_G2G",
+					"url": "http://localhost:8081/example?key=example_G",
+					"includeRefs": [null],
+					"excludeRefs": ["con2"],
+					"active": true
+				},
+				{
+					"name": "example G2H",
+					"key": "example_G2H",
+					"url": "http://localhost:8081/example?key=example_H",
+					"includeRefs": [null],
+					"excludeRefs": ["con2"],
+					"active": true
+				}
+			]
+		}		
+	],
+	"lists": [
+		{
+			"con1": [
+				"content1"
+			],
+			"con2": [
+				"content2"
+			],
+			"not": [
+				"xyz", "zyx"
+			],
+			"all": [
+				"title", "example"
+			]
+		}
+	]
+}
