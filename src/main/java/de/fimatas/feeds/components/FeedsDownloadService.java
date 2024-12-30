@@ -95,6 +95,7 @@ public class FeedsDownloadService {
 
         // finally refresh
         groupCache.setLastRefreshMethodCall(LocalDateTime.now());
+
         Map<String, FeedsCache.FeedCacheEntry> refreshedCache = new HashMap<>();
         for(FeedsConfig.FeedConfig feedConfig : groupConfig.getGroupFeeds()){
             var decoratedRunnable = CircuitBreaker.decorateRunnable(feedsDownloadCircuitBreaker.getCircuitBreaker(feedConfig),
