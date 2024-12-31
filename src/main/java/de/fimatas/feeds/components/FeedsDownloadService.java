@@ -6,24 +6,16 @@ import com.rometools.rome.io.FeedException;
 import com.rometools.rome.io.WireFeedInput;
 import de.fimatas.feeds.model.FeedsCache;
 import de.fimatas.feeds.model.FeedsConfig;
+import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import de.fimatas.feeds.model.TtlInfo;
 import de.fimatas.feeds.util.FeedsUtil;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.hc.client5.http.classic.methods.HttpGet;
-import org.apache.hc.client5.http.config.RequestConfig;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
-import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.apache.hc.core5.http.Header;
-import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.apache.hc.core5.util.Timeout;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 
-import java.io.IOException;
 import java.io.StringReader;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -37,17 +29,16 @@ import java.util.*;
 @CommonsLog
 public class FeedsDownloadService {
 
-    public FeedsDownloadService(FeedsConfigService feedsConfigService, FeedsProcessingService feedsProcessingService) {
+    public FeedsDownloadService(
+            FeedsConfigService feedsConfigService, FeedsProcessingService feedsProcessingService, FeedsHttpClient feedsHttpClient) {
         this.feedsConfigService = feedsConfigService;
         this.feedsProcessingService = feedsProcessingService;
+        this.feedsHttpClient = feedsHttpClient;
     }
 
     private final FeedsConfigService feedsConfigService;
-
     private final FeedsProcessingService feedsProcessingService;
-
-    @Value("${downloadTimeoutSeconds}")
-    private int downloadTimeoutSeconds;
+    private final FeedsHttpClient feedsHttpClient;
 
     private final static String schedulerDelayString = "PT5M";
     private final Duration minimumSchedulerRunDuration = Duration.parse(schedulerDelayString);
@@ -163,31 +154,9 @@ public class FeedsDownloadService {
 
     private void refreshFeed(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
 
-        RequestConfig requestConfig = RequestConfig.custom()
-                .setResponseTimeout(Timeout.ofSeconds(downloadTimeoutSeconds))
-                .setRedirectsEnabled(true)
-                .build();
-
-        try (CloseableHttpClient client = HttpClients.custom()
-                .setDefaultRequestConfig(requestConfig)
-                .build()) {
-
-            HttpGet request = new HttpGet(feedConfig.getUrl());
-
-            client.execute(request, response -> {
-                int statusCode = response.getCode();
-                if(statusCode != org.apache.hc.core5.http.HttpStatus.SC_OK){
-                    throw new RuntimeException("HTTP Status Code: " + statusCode);
-                }
-                String responseBody = EntityUtils.toString(response.getEntity());
-                String processedFeed = feedsProcessingService.processFeed(responseBody, feedConfig);
-                handleRefreshSuccess(groupConfig, feedConfig, processedFeed, response.getHeaders(), responseBody, refreshedCache);
-                return responseBody;
-            });
-
-        } catch (IOException e) {
-            throw new RuntimeException("error getting feed: " + e.getMessage(), e);
-        }
+        var response = feedsHttpClient.getFeeds(feedConfig.getUrl());
+        String processedFeed = feedsProcessingService.processFeed(response, feedConfig);
+        handleRefreshSuccess(groupConfig, feedConfig, processedFeed, response, refreshedCache);
     }
 
     private void fallback(FeedsConfig.FeedsGroup groupConfig,  FeedsConfig.FeedConfig feedConfig, Exception e, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
@@ -200,8 +169,8 @@ public class FeedsDownloadService {
         handleRefreshError(groupConfig, feedConfig, refreshedCache);
     }
 
-    private void handleRefreshSuccess(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedsCache.FeedCacheEntry> refreshedCache){
-        var ttl = newEmptyFeedCacheEntry(groupConfig, feedConfig, feed, responseHeader, responseBody, refreshedCache);
+    private void handleRefreshSuccess(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, FeedsHttpClientResponse response, Map<String, FeedsCache.FeedCacheEntry> refreshedCache){
+        var ttl = newEmptyFeedCacheEntry(groupConfig, feedConfig, feed, response, refreshedCache);
         log.info("-> refreshFeed OK: " + feedConfig.getName() + " - TTL: " + (ttl.getTtl().toMinutes() + " min (" + ttl.getSource() + ")"));
     }
 
@@ -210,35 +179,35 @@ public class FeedsDownloadService {
         if(groupCache.getGroupFeeds().containsKey(feedConfig.getKey())){
            refreshedCache.put(feedConfig.getKey(), groupCache.getGroupFeeds().get(feedConfig.getKey()));
         }else{
-            newEmptyFeedCacheEntry(groupConfig, feedConfig, null, null, null, refreshedCache);
+            newEmptyFeedCacheEntry(groupConfig, feedConfig, null, new FeedsHttpClientResponse(null, null), refreshedCache);
         }
         refreshedCache.get(feedConfig.getKey()).increaseRefreshErrorCounter();
     }
 
-    private TtlInfo newEmptyFeedCacheEntry(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, Header[] responseHeader, String responseBody, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
-        var ttl = getTtlMinutes(responseHeader, responseBody, feedConfig.getKey());
+    private TtlInfo newEmptyFeedCacheEntry(FeedsConfig.FeedsGroup groupConfig, FeedsConfig.FeedConfig feedConfig, String feed, FeedsHttpClientResponse response, Map<String, FeedsCache.FeedCacheEntry> refreshedCache) {
+        var ttl = getTtlMinutes(response, feedConfig.getKey());
         FeedsCache.FeedCacheEntry feedCacheEntry = new FeedsCache.FeedCacheEntry();
         feedCacheEntry.setKey(feedConfig.getKey());
         feedCacheEntry.setLastRefresh(LocalDateTime.now());
         feedCacheEntry.setRefreshErrorCounter(0);
         feedCacheEntry.setContent(feed);
-        feedCacheEntry.setHeaderLastModified(getHeaderValue(responseHeader, HttpHeaders.LAST_MODIFIED));
-        feedCacheEntry.setHeaderContentType(getHeaderValue(responseHeader, HttpHeaders.CONTENT_TYPE));
+        feedCacheEntry.setHeaderLastModified(getHeaderValue(response, HttpHeaders.LAST_MODIFIED));
+        feedCacheEntry.setHeaderContentType(getHeaderValue(response, HttpHeaders.CONTENT_TYPE));
         feedCacheEntry.setTtl(ttl.orElse(defaultTtl(groupConfig)));
         refreshedCache.put(feedConfig.getKey(), feedCacheEntry);
         return feedCacheEntry.getTtl();
     }
 
-    private Optional<TtlInfo> getTtlMinutes(Header[] responseHeader, String responseBody, String key) {
+    private Optional<TtlInfo> getTtlMinutes(FeedsHttpClientResponse response, String key) {
         var optionals = List.of(
-                getTtlMinutesFromHeaderMaxAge(responseHeader),
-                getTtlMinutesFromHeaderRetryAfter(responseHeader, key),
-                getTtlMinutesFromFeed(responseBody));
+                getTtlMinutesFromHeaderMaxAge(response),
+                getTtlMinutesFromHeaderRetryAfter(response, key),
+                getTtlMinutesFromFeed(response));
         return optionals.stream().filter(Optional::isPresent).map(Optional::get).max(Comparator.comparing(TtlInfo::getTtl));
     }
 
-    private Optional<TtlInfo> getTtlMinutesFromHeaderMaxAge(Header[] responseHeader) {
-        String cacheControl = getHeaderValue(responseHeader, HttpHeaders.CACHE_CONTROL);
+    private Optional<TtlInfo> getTtlMinutesFromHeaderMaxAge(FeedsHttpClientResponse response) {
+        String cacheControl = getHeaderValue(response, HttpHeaders.CACHE_CONTROL);
             if (cacheControl != null && cacheControl.contains("max-age=")) {
                 try {
                     long maxAgeSeconds = Long.parseLong(cacheControl.split("max-age=")[1].split(",")[0]);
@@ -249,8 +218,8 @@ public class FeedsDownloadService {
         return Optional.empty();
     }
 
-    private Optional<TtlInfo> getTtlMinutesFromHeaderRetryAfter(Header[] responseHeader, String key) {
-        String retryAfter = getHeaderValue(responseHeader, HttpHeaders.RETRY_AFTER);
+    private Optional<TtlInfo> getTtlMinutesFromHeaderRetryAfter(FeedsHttpClientResponse response, String key) {
+        String retryAfter = getHeaderValue(response, HttpHeaders.RETRY_AFTER);
             if (retryAfter != null) {
                 if (NumberUtils.isParsable(retryAfter)) {
                     long retrySeconds = Long.parseLong(retryAfter);
@@ -269,12 +238,12 @@ public class FeedsDownloadService {
         return Optional.empty();
     }
 
-    private Optional<TtlInfo> getTtlMinutesFromFeed(String responseBody) {
-        if(responseBody == null || responseBody.isEmpty()){
+    private Optional<TtlInfo> getTtlMinutesFromFeed(FeedsHttpClientResponse response) {
+        if(response.getBody() == null || response.getBody().isEmpty()){
             return Optional.empty();
         }
         try {
-            WireFeed wireFeed = new WireFeedInput().build(new StringReader(Objects.requireNonNull(responseBody)));
+            WireFeed wireFeed = new WireFeedInput().build(new StringReader(Objects.requireNonNull(response.getBody())));
             if (wireFeed instanceof Channel channel && channel.getTtl() > 0) {
                 return Optional.of(new TtlInfo(Duration.ofMinutes(channel.getTtl()), "ttl"));
             }
@@ -325,10 +294,10 @@ public class FeedsDownloadService {
         return new TtlInfo(Duration.ofMinutes(groupConfig.getGroupDefaultDurationMinutes()), "default");
     }
 
-    private static String getHeaderValue(Header[] headers, String headerName) {
-        if(headers != null) {
-            for (Header header : headers) {
-                if (header.getName().equalsIgnoreCase(headerName)) {
+    private static String getHeaderValue(FeedsHttpClientResponse response, String headerName) {
+        if(response.getHeaders() != null) {
+            for (Map.Entry<String, String> header : response.getHeaders().entrySet()) {
+                if (header.getKey().equalsIgnoreCase(headerName)) {
                     return header.getValue();
                 }
             }

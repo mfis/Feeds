@@ -5,10 +5,10 @@ import com.rometools.rome.feed.rss.Item;
 import com.rometools.rome.io.WireFeedInput;
 import com.rometools.rome.io.WireFeedOutput;
 import de.fimatas.feeds.model.FeedsConfig;
+import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.lang.Nullable;
 import org.xml.sax.InputSource;
 
 import java.io.*;
@@ -28,13 +28,14 @@ public class FeedsProcessingService {
     private int relevantDescriptionLength;
 
     @SneakyThrows
-    public String processFeed(@Nullable String originalFeed, FeedsConfig.FeedConfig feedConfig){
+    public String processFeed(FeedsHttpClientResponse originalFeed, FeedsConfig.FeedConfig feedConfig){
 
         if(originalFeed == null){
             return null;
         }
 
-        Channel channel = (Channel) new WireFeedInput().build(new InputSource(new ByteArrayInputStream(originalFeed.getBytes(StandardCharsets.UTF_8))));
+        Channel channel = (Channel) new WireFeedInput()
+                .build(new InputSource(new ByteArrayInputStream(originalFeed.getBody().getBytes(StandardCharsets.UTF_8))));
 
         var originalLink = channel.getLink();
         var originalDescription = channel.getDescription();
