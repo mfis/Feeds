@@ -20,6 +20,11 @@ public class FeedController {
     @ResponseBody
     public void getFeed(@PathVariable String key, HttpServletResponse response) throws IOException {
 
+        if(FeedsCache.getInstance().isNotValid()){
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
         final FeedsCache.FeedCacheEntry feedCacheEntry = FeedsCache.getInstance().lookupFeed(key);
         if(feedCacheEntry == null){
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
