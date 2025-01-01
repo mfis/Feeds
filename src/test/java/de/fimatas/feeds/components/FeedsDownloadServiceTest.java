@@ -14,7 +14,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.stream.IntStream;
 
 import static org.mockito.Mockito.*;
 
@@ -35,7 +37,7 @@ class FeedsDownloadServiceTest {
     @BeforeEach
     void beforeEach() {
         System.setProperty("active.profile", "test");
-        FeedsCache.getInstance().deleteCacheFile();
+        FeedsCache.getInstance().destroyCache();
         MockitoAnnotations.openMocks(this);
 
         feedsConfigService = new FeedsConfigService();
@@ -45,20 +47,42 @@ class FeedsDownloadServiceTest {
 
     @AfterEach
     void afterEach() {
-        FeedsCache.getInstance().deleteCacheFile();
+        FeedsCache.getInstance().destroyCache();
         System.clearProperty("active.profile");
     }
 
     @Test
     void refreshScheduler_callOnce() {
         // Arrange
-        FeedsHttpClientResponse mockResponse = new FeedsHttpClientResponse(new HashMap<>(), minimalFeed(false));
-        when(feedsHttpClient.getFeeds(anyString())).thenReturn(mockResponse);
-        when(feedsProcessingService.processFeed(any(), any())).thenReturn(minimalFeed(true));
+        arrangeTestRefreshScheduler();
         // Act
         feedsDownloadService.refreshScheduler();
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
+    }
+
+    @Test
+    void refreshScheduler_callMultipleSimple() {
+        // Arrange
+        arrangeTestRefreshScheduler();
+        // Act
+        IntStream.range(0, 10).forEach(i -> feedsDownloadService.refreshScheduler());
+        // Assert
+        verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
+    }
+
+    @Test
+    void refreshScheduler_callMultipleSimpleWithException() {
+        // Arrange
+        arrangeTestRefreshScheduler();
+        feedsConfigService.getFeedsGroups().set(0, null);
+        // Act
+        IntStream.range(0, 10).forEach(i -> {
+            feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
+            feedsDownloadService.refreshScheduler();
+        });
+        // Assert
+        verify(feedsHttpClient, times(0)).getFeeds(anyString());
     }
 
     private int getFeedsCount(){
@@ -73,5 +97,11 @@ class FeedsDownloadServiceTest {
         channel.setDescription(processed ? "processed" : "raw");
         channel.setLink("http://localhost");
         return new WireFeedOutput().outputString(channel);
+    }
+
+    private void arrangeTestRefreshScheduler() {
+        FeedsHttpClientResponse mockResponse = new FeedsHttpClientResponse(new HashMap<>(), minimalFeed(false));
+        lenient().when(feedsHttpClient.getFeeds(anyString())).thenReturn(mockResponse);
+        lenient().when(feedsProcessingService.processFeed(any(), any())).thenReturn(minimalFeed(true));
     }
 }

@@ -128,8 +128,10 @@ public class FeedsCache {
         return Path.of(System.getProperty("user.home") + "/Documents/config/feeds/cache" + profile +".json").toFile();
     }
 
-    public void deleteCacheFile() {
+    public void destroyCache() {
+        assert System.getProperty("active.profile", "").equals("test");
         FileUtils.deleteQuietly(lookupCacheFile());
+        instance = null;
     }
 
     @Data

@@ -42,7 +42,7 @@ public class FeedsDownloadService {
 
     private final static String schedulerDelayString = "PT5M";
     private final Duration minimumSchedulerRunDuration = Duration.parse(schedulerDelayString);
-    private LocalDateTime lastSchedulerRun = LocalDateTime.now().minus(minimumSchedulerRunDuration).minusSeconds(1);
+    protected LocalDateTime lastSchedulerRun = LocalDateTime.now().minus(minimumSchedulerRunDuration).minusSeconds(1);
 
     private final LocalTime dailyStartTime = LocalTime.of(5, 20);
     private final LocalTime dailyEndTime = LocalTime.of(22, 30);
@@ -94,7 +94,7 @@ public class FeedsDownloadService {
         }
         if (lastSchedulerRun.plus(minimumSchedulerRunDuration).isAfter(LocalDateTime.now())) {
             log.warn("refreshScheduler called too frequently!");
-            return true;
+            return true; // tested by refreshScheduler_callMultipleSimple()
         }
         if (FeedsCache.getInstance().getExceptionTimestamp() != null && FeedsCache.getInstance().getExceptionTimestamp()
                 .plus(minimumSchedulerRunDuration).isAfter(LocalDateTime.now())) {
