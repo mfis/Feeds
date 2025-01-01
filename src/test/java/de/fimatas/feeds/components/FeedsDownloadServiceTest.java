@@ -154,8 +154,29 @@ class FeedsDownloadServiceTest {
         assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY));
     }
 
+    @Test
+    void refreshScheduler_callMultipleSCheckIntervalAgainstCache() {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler();
+        arrangeDefaultRefreshDuration(1000);
+        // Act
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+            arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
+            feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
+            feedsDownloadService.refreshScheduler();
+        });
+        // Assert
+        verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString()); // calls
+        assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_CACHE)); // returns
+    }
+
     private int getFeedsCount(){
         return (int) feedsConfigService.getFeedsGroups().stream().mapToLong(g -> g.getGroupFeeds().size()).sum();
+    }
+
+    private int getGroupsCount(){
+        return feedsConfigService.getFeedsGroups().size();
     }
 
     private int countLogging(String messagePart) {
@@ -184,5 +205,9 @@ class FeedsDownloadServiceTest {
         FeedsHttpClientResponse mockResponse = new FeedsHttpClientResponse(new HashMap<>(), minimalFeed(false));
         lenient().when(feedsHttpClient.getFeeds(anyString())).thenReturn(mockResponse);
         lenient().when(feedsProcessingService.processFeed(any(), any())).thenReturn(minimalFeed(true));
+    }
+
+    private void arrangeDefaultRefreshDuration(int minutes) {
+        feedsConfigService.getFeedsGroups().forEach(g -> g.setGroupDefaultDurationMinutes(minutes));
     }
 }
