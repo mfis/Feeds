@@ -33,19 +33,21 @@ import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_WITH_EXC
 public class FeedsDownloadService {
 
     public FeedsDownloadService(
-            FeedsConfigService feedsConfigService, FeedsProcessingService feedsProcessingService, FeedsHttpClient feedsHttpClient) {
+            FeedsConfigService feedsConfigService, FeedsProcessingService feedsProcessingService, FeedsHttpClient feedsHttpClient, FeedsTimer feedsTimer) {
         this.feedsConfigService = feedsConfigService;
         this.feedsProcessingService = feedsProcessingService;
         this.feedsHttpClient = feedsHttpClient;
+        this.feedsTimer = feedsTimer;
     }
 
     private final FeedsConfigService feedsConfigService;
     private final FeedsProcessingService feedsProcessingService;
     private final FeedsHttpClient feedsHttpClient;
+    private final FeedsTimer feedsTimer;
 
     private final static String schedulerDelayString = "PT5M";
     private final Duration minimumSchedulerRunDuration = Duration.parse(schedulerDelayString);
-    protected LocalDateTime lastSchedulerRun = LocalDateTime.now().minus(minimumSchedulerRunDuration).minusSeconds(1);
+    protected LocalDateTime lastSchedulerRun = null;
 
     private final LocalTime dailyStartTime = LocalTime.of(5, 20);
     private final LocalTime dailyEndTime = LocalTime.of(22, 30);
@@ -53,7 +55,8 @@ public class FeedsDownloadService {
     private final FeedsDownloadCircuitBreaker feedsDownloadCircuitBreaker = new FeedsDownloadCircuitBreaker();
 
     @PostConstruct
-    private void init() {
+    protected void init() {
+        lastSchedulerRun = feedsTimer.localDateTimeNow().minus(minimumSchedulerRunDuration).minusSeconds(1);
         FeedsCache.getInstance().checkCacheFile();
     }
 
@@ -64,7 +67,7 @@ public class FeedsDownloadService {
             log.debug("call refreshScheduler");
             if (skip()) return;
 
-            lastSchedulerRun = LocalDateTime.now();
+            lastSchedulerRun = feedsTimer.localDateTimeNow();
             for(var group : feedsConfigService.getFeedsGroups()){
                 if(refresh(group)){
                     isUpdated = true;
@@ -82,7 +85,7 @@ public class FeedsDownloadService {
 
     private boolean skip() {
 
-        LocalTime now = LocalTime.now();
+        var now = feedsTimer.localTimeNow();
         if (now.isBefore(dailyStartTime)) {
             log.debug("refreshScheduler daily start time not reached");
             return true;
@@ -95,14 +98,14 @@ public class FeedsDownloadService {
             log.warn("cache is not valid!");
             return true;
         }
-        if (lastSchedulerRun.plus(minimumSchedulerRunDuration).isAfter(LocalDateTime.now())) {
+        if (lastSchedulerRun.plus(minimumSchedulerRunDuration).isAfter(feedsTimer.localDateTimeNow())) {
             log.warn(REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY);
-            return true; // tested by refreshScheduler_callMultipleSimple()
+            return true;
         }
         if (FeedsCache.getInstance().getExceptionTimestamp() != null && FeedsCache.getInstance().getExceptionTimestamp()
-                .plus(minimumSchedulerRunDuration).isAfter(LocalDateTime.now())) {
+                .plus(minimumSchedulerRunDuration).isAfter(feedsTimer.localDateTimeNow())) {
             log.warn(REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY);
-            return true; // tested by refreshScheduler_callMultipleSimpleWithException()
+            return true;
         }
         return false;
     }
@@ -118,7 +121,7 @@ public class FeedsDownloadService {
         if(!groupCache.getGroupFeeds().isEmpty()){
             var delayMinutes = getDelayMinutes(groupConfig);
             var maxLastRefresh = groupCache.getGroupFeeds().values().stream().map(FeedsCache.FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
-            var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, LocalDateTime.now());
+            var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, feedsTimer.localDateTimeNow());
             if(maxDurationSinceLastRefresh.compareTo(Duration.ofMinutes(delayMinutes)) < 1){
                 log.debug("group '" + groupConfig.getGroupId() + "' skipping refresh (cache): " + maxDurationSinceLastRefresh + " / " + delayMinutes);
                 return false;
@@ -127,13 +130,13 @@ public class FeedsDownloadService {
 
         // check interval against method call
         if(groupCache.getLastRefreshMethodCall() != null &&
-                Duration.between(groupCache.getLastRefreshMethodCall(), LocalDateTime.now()).toMinutes() < groupConfig.getGroupDefaultDurationMinutes()){
+                Duration.between(groupCache.getLastRefreshMethodCall(), feedsTimer.localDateTimeNow()).toMinutes() < groupConfig.getGroupDefaultDurationMinutes()){
             log.debug("group '" + groupConfig.getGroupId() + "' skipping refresh (method call): " + groupCache.getLastRefreshMethodCall());
             return false;
         }
 
         // finally refresh
-        groupCache.setLastRefreshMethodCall(LocalDateTime.now());
+        groupCache.setLastRefreshMethodCall(feedsTimer.localDateTimeNow());
 
         Map<String, FeedsCache.FeedCacheEntry> refreshedCache = new HashMap<>();
         for(FeedsConfig.FeedConfig feedConfig : groupConfig.getGroupFeeds()){
@@ -150,7 +153,7 @@ public class FeedsDownloadService {
 
         log.info("group '" + groupConfig.getGroupId() + "' new overall delay: " + getDelayMinutes(groupConfig) + " minutes (default: " +
                 groupConfig.getGroupDefaultDurationMinutes() + ") - next refresh: " +
-                (LocalTime.now().plusMinutes(getDelayMinutes(groupConfig))).truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_LOCAL_TIME));
+                (feedsTimer.localTimeNow().plusMinutes(getDelayMinutes(groupConfig))).truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_LOCAL_TIME));
 
         return true;
     }
@@ -191,7 +194,7 @@ public class FeedsDownloadService {
         var ttl = getTtlMinutes(response, feedConfig.getKey());
         FeedsCache.FeedCacheEntry feedCacheEntry = new FeedsCache.FeedCacheEntry();
         feedCacheEntry.setKey(feedConfig.getKey());
-        feedCacheEntry.setLastRefresh(LocalDateTime.now());
+        feedCacheEntry.setLastRefresh(feedsTimer.localDateTimeNow());
         feedCacheEntry.setRefreshErrorCounter(0);
         feedCacheEntry.setContent(feed);
         feedCacheEntry.setHeaderLastModified(getHeaderValue(response, HttpHeaders.LAST_MODIFIED));
@@ -231,7 +234,7 @@ public class FeedsDownloadService {
                     try {
                         TemporalAccessor retryAfterTime = DateTimeFormatter.RFC_1123_DATE_TIME.parse(retryAfter);
                         LocalDateTime localDateTime = LocalDateTime.from(retryAfterTime);
-                        Duration duration = Duration.between(LocalDateTime.now(), localDateTime);
+                        Duration duration = Duration.between(feedsTimer.localDateTimeNow(), localDateTime);
                         return duration.isNegative() ? Optional.empty() : Optional.of(new TtlInfo(duration, "RetryAfterTS"));
                     } catch (Exception ignored) {
                         log.warn("Could not parse retry-after: " + retryAfter + " for feed:" + key);
@@ -259,8 +262,8 @@ public class FeedsDownloadService {
                     if(updateBase != null) {
                         DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
                         ZonedDateTime dateTime = ZonedDateTime.parse(updateBase, formatter);
-                        if(dateTime.isAfter(ZonedDateTime.now())) {
-                            var baseDuration = Duration.between(ZonedDateTime.now(), dateTime);
+                        if(dateTime.isAfter(feedsTimer.zonedDateTimeNow())) {
+                            var baseDuration = Duration.between(feedsTimer.zonedDateTimeNow(), dateTime);
                             return Optional.of(new TtlInfo(baseDuration.plus(updateDuration), "updatePeriod+base"));
                         }
                     }

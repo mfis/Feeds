@@ -1,9 +1,6 @@
 package de.fimatas.feeds.configuration;
 
-import de.fimatas.feeds.components.FeedsConfigService;
-import de.fimatas.feeds.components.FeedsDownloadService;
-import de.fimatas.feeds.components.FeedsHttpClient;
-import de.fimatas.feeds.components.FeedsProcessingService;
+import de.fimatas.feeds.components.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -26,7 +23,12 @@ public class FeedsConfiguration {
     }
 
     @Bean
+    public FeedsTimer feedsTimer() {
+        return new FeedsTimer();
+    }
+
+    @Bean
     public FeedsDownloadService feedsDownloadService() {
-        return new FeedsDownloadService(feedsConfigService(), feedsProcessingService(), feedsHttpClient());
+        return new FeedsDownloadService(feedsConfigService(), feedsProcessingService(), feedsHttpClient(), feedsTimer());
     }
 }

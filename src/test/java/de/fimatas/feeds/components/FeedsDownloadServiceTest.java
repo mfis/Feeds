@@ -19,7 +19,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAmount;
 import java.util.HashMap;
 import java.util.stream.IntStream;
 
@@ -37,6 +40,9 @@ class FeedsDownloadServiceTest {
 
     @Mock
     private FeedsHttpClient feedsHttpClient;
+
+    @Mock
+    private FeedsTimer feedsTimer;
 
     private FeedsConfigService feedsConfigService;
     private FeedsDownloadService feedsDownloadService;
@@ -60,7 +66,7 @@ class FeedsDownloadServiceTest {
 
         feedsConfigService = new FeedsConfigService();
         feedsConfigService.useTestConfig = true;
-        feedsDownloadService = new FeedsDownloadService(feedsConfigService, feedsProcessingService, feedsHttpClient);
+        feedsDownloadService = new FeedsDownloadService(feedsConfigService, feedsProcessingService, feedsHttpClient, feedsTimer);
     }
 
     @AfterEach
@@ -76,6 +82,7 @@ class FeedsDownloadServiceTest {
     @Test
     void refreshScheduler_callOnce() {
         // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
         arrangeTestRefreshScheduler();
         // Act
         feedsDownloadService.refreshScheduler();
@@ -86,6 +93,7 @@ class FeedsDownloadServiceTest {
     @Test
     void refreshScheduler_callMultipleSimple() {
         // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
         arrangeTestRefreshScheduler();
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> feedsDownloadService.refreshScheduler());
@@ -97,6 +105,7 @@ class FeedsDownloadServiceTest {
     @Test
     void refreshScheduler_callMultipleSimpleWithException() {
         // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
         arrangeTestRefreshScheduler();
         feedsConfigService.getFeedsGroups().set(0, null);
         // Act
@@ -127,7 +136,15 @@ class FeedsDownloadServiceTest {
         return new WireFeedOutput().outputString(channel);
     }
 
+    private void arrangeTimerBase1200(TemporalAmount temporalAmount) {
+        LocalDateTime base = LocalDateTime.of(2025, 1, 1, 12, 0);
+        lenient().when(feedsTimer.localDateTimeNow()).thenReturn(base.plus(temporalAmount));
+        lenient().when(feedsTimer.localTimeNow()).thenReturn(base.toLocalTime().plus(temporalAmount));
+        lenient().when(feedsTimer.zonedDateTimeNow()).thenReturn(base.plus(temporalAmount).atZone(ZoneId.systemDefault()));
+    }
+
     private void arrangeTestRefreshScheduler() {
+        feedsDownloadService.init();
         FeedsHttpClientResponse mockResponse = new FeedsHttpClientResponse(new HashMap<>(), minimalFeed(false));
         lenient().when(feedsHttpClient.getFeeds(anyString())).thenReturn(mockResponse);
         lenient().when(feedsProcessingService.processFeed(any(), any())).thenReturn(minimalFeed(true));
