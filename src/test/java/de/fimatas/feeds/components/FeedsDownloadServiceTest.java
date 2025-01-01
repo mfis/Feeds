@@ -172,7 +172,7 @@ class FeedsDownloadServiceTest {
     }
 
     @Test
-    void refreshScheduler_callMultipleSCheckIntervalAgainstMethodCall() {
+    void refreshScheduler_callMultipleSCheckIntervalAgainstMethodCallWithEmptyGroup() {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
         arrangeTestRefreshScheduler();
@@ -183,6 +183,26 @@ class FeedsDownloadServiceTest {
             feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
             feedsDownloadService.refreshScheduler();
             feedsConfigService.getFeedsGroups().forEach(fg -> FeedsCache.getInstance().lookupGroup(fg.getGroupId()).getGroupFeeds().clear()); // cheat feed update timestamp
+        });
+        // Assert
+        verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString()); // calls
+        assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+    }
+
+    @Test
+    void refreshScheduler_callMultipleSCheckIntervalAgainstMethodCallOldFeedTimestamp() {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler();
+        arrangeDefaultRefreshDuration(100);
+        // Act
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+            arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
+            feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
+            feedsDownloadService.refreshScheduler();
+            feedsConfigService.getFeedsGroups().forEach(fg
+                    -> FeedsCache.getInstance().lookupGroup(fg.getGroupId()).getGroupFeeds().forEach((k, v)
+                    -> v.setLastRefresh(v.getLastRefresh().minusMinutes(96)))); // cheat feed update timestamp
         });
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString()); // calls
