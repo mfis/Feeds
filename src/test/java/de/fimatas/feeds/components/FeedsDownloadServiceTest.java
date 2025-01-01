@@ -26,8 +26,7 @@ import java.time.temporal.TemporalAmount;
 import java.util.HashMap;
 import java.util.stream.IntStream;
 
-import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY;
-import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY;
+import static de.fimatas.feeds.model.FeedsLogMessages.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
@@ -77,6 +76,30 @@ class FeedsDownloadServiceTest {
         logger.setLevel(null);
         logger.detachAppender(loggingListAppender);
         loggingListAppender.stop();
+    }
+
+    @Test
+    void refreshScheduler_OutOfTimeDailyStartTime() {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofHours(-8)); // 04:00
+        arrangeTestRefreshScheduler();
+        // Act
+        feedsDownloadService.refreshScheduler();
+        // Assert
+        verify(feedsHttpClient, times(0)).getFeeds(anyString());
+        assertEquals(1, countLogging(REFRESH_SCHEDULER_DAILY_START_TIME_NOT_REACHED));
+    }
+
+    @Test
+    void refreshScheduler_OutOfTimeDailyEndTime() {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofHours(11).plusMinutes(30)); // 23:30
+        arrangeTestRefreshScheduler();
+        // Act
+        feedsDownloadService.refreshScheduler();
+        // Assert
+        verify(feedsHttpClient, times(0)).getFeeds(anyString());
+        assertEquals(1, countLogging(REFRESH_SCHEDULER_DAILY_END_TIME_REACHED));
     }
 
     @Test

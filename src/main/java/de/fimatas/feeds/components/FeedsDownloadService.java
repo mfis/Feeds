@@ -26,8 +26,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
 
-import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY;
-import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY;
+import static de.fimatas.feeds.model.FeedsLogMessages.*;
 
 @CommonsLog
 public class FeedsDownloadService {
@@ -87,11 +86,11 @@ public class FeedsDownloadService {
 
         var now = feedsTimer.localTimeNow();
         if (now.isBefore(dailyStartTime)) {
-            log.debug("refreshScheduler daily start time not reached");
+            log.debug(REFRESH_SCHEDULER_DAILY_START_TIME_NOT_REACHED);
             return true;
         }
         if (now.isAfter(dailyEndTime)) {
-            log.debug("refreshScheduler daily end time reached");
+            log.debug(REFRESH_SCHEDULER_DAILY_END_TIME_REACHED);
             return true;
         }
         if (FeedsCache.getInstance().isNotValid()) {
