@@ -1,5 +1,8 @@
 package de.fimatas.feeds.components;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.rometools.rome.feed.rss.Channel;
 import com.rometools.rome.io.WireFeedOutput;
 import de.fimatas.feeds.model.FeedsCache;
@@ -10,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,6 +22,9 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.stream.IntStream;
 
+import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY;
+import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,11 +38,20 @@ class FeedsDownloadServiceTest {
     private FeedsHttpClient feedsHttpClient;
 
     private FeedsConfigService feedsConfigService;
-
     private FeedsDownloadService feedsDownloadService;
+    private Logger logger;
+    private ListAppender<ILoggingEvent> loggingListAppender;
+
+    private final static int COUNT_MULTIPLE_CALLS = 20;
 
     @BeforeEach
     void beforeEach() {
+        //noinspection LoggerInitializedWithForeignClass
+        logger = (Logger) LoggerFactory.getLogger(FeedsDownloadService.class);
+        loggingListAppender = new ListAppender<>();
+        loggingListAppender.start();
+        logger.addAppender(loggingListAppender);
+
         System.setProperty("active.profile", "test");
         FeedsCache.getInstance().destroyCache();
         MockitoAnnotations.openMocks(this);
@@ -49,6 +65,9 @@ class FeedsDownloadServiceTest {
     void afterEach() {
         FeedsCache.getInstance().destroyCache();
         System.clearProperty("active.profile");
+
+        logger.detachAppender(loggingListAppender);
+        loggingListAppender.stop();
     }
 
     @Test
@@ -66,9 +85,10 @@ class FeedsDownloadServiceTest {
         // Arrange
         arrangeTestRefreshScheduler();
         // Act
-        IntStream.range(0, 10).forEach(i -> feedsDownloadService.refreshScheduler());
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> feedsDownloadService.refreshScheduler());
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
+        assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY));
     }
 
     @Test
@@ -77,16 +97,21 @@ class FeedsDownloadServiceTest {
         arrangeTestRefreshScheduler();
         feedsConfigService.getFeedsGroups().set(0, null);
         // Act
-        IntStream.range(0, 10).forEach(i -> {
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
             feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
             feedsDownloadService.refreshScheduler();
         });
         // Assert
         verify(feedsHttpClient, times(0)).getFeeds(anyString());
+        assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY));
     }
 
     private int getFeedsCount(){
         return (int) feedsConfigService.getFeedsGroups().stream().mapToLong(g -> g.getGroupFeeds().size()).sum();
+    }
+
+    private int countLogging(String messagePart) {
+        return (int) loggingListAppender.list.stream().filter(log -> log.getFormattedMessage().contains(messagePart)).count();
     }
 
     @SneakyThrows

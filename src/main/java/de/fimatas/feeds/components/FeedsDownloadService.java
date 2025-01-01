@@ -26,6 +26,9 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
 
+import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY;
+import static de.fimatas.feeds.model.FeedsLogMessages.REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY;
+
 @CommonsLog
 public class FeedsDownloadService {
 
@@ -93,13 +96,13 @@ public class FeedsDownloadService {
             return true;
         }
         if (lastSchedulerRun.plus(minimumSchedulerRunDuration).isAfter(LocalDateTime.now())) {
-            log.warn("refreshScheduler called too frequently!");
+            log.warn(REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY);
             return true; // tested by refreshScheduler_callMultipleSimple()
         }
         if (FeedsCache.getInstance().getExceptionTimestamp() != null && FeedsCache.getInstance().getExceptionTimestamp()
                 .plus(minimumSchedulerRunDuration).isAfter(LocalDateTime.now())) {
-            log.warn("refreshScheduler (with exception) called too frequently!");
-            return true;
+            log.warn(REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY);
+            return true; // tested by refreshScheduler_callMultipleSimpleWithException()
         }
         return false;
     }
