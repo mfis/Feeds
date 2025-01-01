@@ -134,6 +134,11 @@ public class FeedsCache {
         instance = null;
     }
 
+    public void invalidateCache() {
+        assert System.getProperty("active.profile", "").equals("test");
+        cache = null;
+    }
+
     @Data
     public static class FeedsCacheRoot {
         private LocalDateTime lastException = null;

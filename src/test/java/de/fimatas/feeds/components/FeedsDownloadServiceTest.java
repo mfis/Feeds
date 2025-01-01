@@ -103,6 +103,19 @@ class FeedsDownloadServiceTest {
     }
 
     @Test
+    void refreshScheduler_InvalidCache() {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler();
+        FeedsCache.getInstance().invalidateCache();
+        // Act
+        feedsDownloadService.refreshScheduler();
+        // Assert
+        verify(feedsHttpClient, times(0)).getFeeds(anyString());
+        assertEquals(1, countLogging(CACHE_IS_NOT_VALID));
+    }
+
+    @Test
     void refreshScheduler_callOnce() {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));

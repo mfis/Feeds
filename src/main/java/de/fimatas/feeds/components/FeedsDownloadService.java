@@ -94,7 +94,7 @@ public class FeedsDownloadService {
             return true;
         }
         if (FeedsCache.getInstance().isNotValid()) {
-            log.warn("cache is not valid!");
+            log.warn(CACHE_IS_NOT_VALID);
             return true;
         }
         if (lastSchedulerRun.plus(minimumSchedulerRunDuration).isAfter(feedsTimer.localDateTimeNow())) {
