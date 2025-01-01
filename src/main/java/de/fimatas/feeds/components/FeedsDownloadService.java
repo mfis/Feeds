@@ -121,8 +121,8 @@ public class FeedsDownloadService {
             var delayMinutes = getDelayMinutes(groupConfig);
             var maxLastRefresh = groupCache.getGroupFeeds().values().stream().map(FeedsCache.FeedCacheEntry::getLastRefresh).max(LocalDateTime::compareTo).orElseThrow();
             var maxDurationSinceLastRefresh = Duration.between(maxLastRefresh, feedsTimer.localDateTimeNow());
-            if(maxDurationSinceLastRefresh.compareTo(Duration.ofMinutes(delayMinutes)) < 1){
-                log.debug("group '" + groupConfig.getGroupId() + "' " + SKIPPING_REFRESH_CACHE + ": " + maxDurationSinceLastRefresh + " / " + delayMinutes);
+            if(maxDurationSinceLastRefresh.toMillis() < Duration.ofMinutes(delayMinutes).toMillis()){
+                log.debug("group '" + groupConfig.getGroupId() + "' " + SKIPPING_REFRESH_CACHE + ": " + maxDurationSinceLastRefresh.toMinutes() + " / " + delayMinutes);
                 return false;
             }
         }

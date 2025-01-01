@@ -7,6 +7,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.rometools.rome.feed.rss.Channel;
 import com.rometools.rome.io.WireFeedOutput;
 import de.fimatas.feeds.model.FeedsCache;
+import de.fimatas.feeds.model.FeedsConfig;
 import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
@@ -228,7 +229,73 @@ class FeedsDownloadServiceTest {
         assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
-    // TODO: UNCHEATED REFRESH CASE
+    @ParameterizedTest
+    @ValueSource(ints = {0}) // 0 = none
+    void refreshScheduler_callMultipleAllOkay(int errorType) {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        arrangeDefaultRefreshDuration(10);
+        // Act
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            feedsDownloadService.refreshScheduler();
+        });
+        // Assert
+        verify(feedsHttpClient, times(getFeedsCount() * COUNT_MULTIPLE_CALLS)).getFeeds(anyString()); // calls
+        assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+        assertEquals(getGroupsCount() * COUNT_MULTIPLE_CALLS, countLogging(NEW_OVERALL_DELAY));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2}) // 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleWithErrorForCircuitBreakerOpenState(int errorType) {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        arrangeDefaultRefreshDuration(10);
+        var fc = new FeedsConfig.FeedConfig();
+        fc.setKey("key");
+        var cb = new FeedsDownloadCircuitBreaker().getCircuitBreaker(fc);
+        // Act
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            feedsDownloadService.refreshScheduler();
+        });
+        // Assert
+
+        verify(feedsHttpClient, times(getFeedsCount() * cb.getCircuitBreakerConfig().getMinimumNumberOfCalls())).getFeeds(anyString()); // calls
+        assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+        assertEquals(getGroupsCount() * COUNT_MULTIPLE_CALLS, countLogging(NEW_OVERALL_DELAY));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2}) // 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleWithErrorForCircuitBreakerWithTransitionToClosedState(int errorType) {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        arrangeDefaultRefreshDuration(10);
+        var fc = new FeedsConfig.FeedConfig();
+        fc.setKey("key");
+        var cb = new FeedsDownloadCircuitBreaker().getCircuitBreaker(fc);
+        // Act
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            feedsDownloadService.refreshScheduler();
+        });
+        // Assert
+
+        verify(feedsHttpClient, times(getFeedsCount() * cb.getCircuitBreakerConfig().getMinimumNumberOfCalls())).getFeeds(anyString()); // calls
+        assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+        assertEquals(getGroupsCount() * COUNT_MULTIPLE_CALLS, countLogging(NEW_OVERALL_DELAY));
+
+        arrangeTimerBase1200(Duration.ofHours(7)); // FIXME: inject own CircuitBreaker
+        feedsDownloadService.refreshScheduler();
+        verify(feedsHttpClient, times(getFeedsCount() * (cb.getCircuitBreakerConfig().getMinimumNumberOfCalls() + 1))).getFeeds(anyString()); // calls
+        // FIXME: other asserts
+    }
+
     // TODO: NEW BEAN INSTANCE, EXISTING CACHE
     // TODO: CACHE READ/WRITE ERROR
     // TODO: CIRCUIT BREAKER
