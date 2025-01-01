@@ -124,7 +124,12 @@ public class FeedsCache {
     }
 
     private File lookupCacheFile(){
-        return Path.of(System.getProperty("user.home") + "/Documents/config/feeds/cache.json").toFile();
+        var profile = System.getProperty("active.profile", "");
+        return Path.of(System.getProperty("user.home") + "/Documents/config/feeds/cache" + profile +".json").toFile();
+    }
+
+    public void deleteCacheFile() {
+        FileUtils.deleteQuietly(lookupCacheFile());
     }
 
     @Data

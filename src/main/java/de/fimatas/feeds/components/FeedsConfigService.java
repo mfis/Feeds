@@ -19,7 +19,7 @@ import java.util.List;
 public class FeedsConfigService {
 
     @Value("${useTestConfig:true}")
-    private boolean useTestConfig;
+    protected boolean useTestConfig;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 

@@ -55,7 +55,7 @@ public class FeedsDownloadService {
     }
 
     @Scheduled(initialDelay = 1000 * 2, fixedDelayString = schedulerDelayString)
-    private void refreshScheduler() {
+    public void refreshScheduler() {
         var isUpdated = false;
         try {
             log.debug("call refreshScheduler");
