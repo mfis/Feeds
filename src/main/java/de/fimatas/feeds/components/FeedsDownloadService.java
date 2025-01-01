@@ -150,7 +150,7 @@ public class FeedsDownloadService {
 
         FeedsCache.getInstance().updateGroupFeeds(groupCache, refreshedCache);
 
-        log.info("group '" + groupConfig.getGroupId() + "' new overall delay: " + getDelayMinutes(groupConfig) + " minutes (default: " +
+        log.info("group '" + groupConfig.getGroupId() + "' " + NEW_OVERALL_DELAY + ": " + getDelayMinutes(groupConfig) + " minutes (default: " +
                 groupConfig.getGroupDefaultDurationMinutes() + ") - next refresh: " +
                 (feedsTimer.localTimeNow().plusMinutes(getDelayMinutes(groupConfig))).truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_LOCAL_TIME));
 

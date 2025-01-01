@@ -11,7 +11,6 @@ import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -91,6 +90,7 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(0)).getFeeds(anyString());
         assertEquals(1, countLogging(REFRESH_SCHEDULER_DAILY_START_TIME_NOT_REACHED));
+        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -104,6 +104,7 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(0)).getFeeds(anyString());
         assertEquals(1, countLogging(REFRESH_SCHEDULER_DAILY_END_TIME_REACHED));
+        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -118,6 +119,7 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(0)).getFeeds(anyString());
         assertEquals(1, countLogging(CACHE_IS_NOT_VALID));
+        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -130,6 +132,7 @@ class FeedsDownloadServiceTest {
         feedsDownloadService.refreshScheduler();
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -143,6 +146,7 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
         assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY));
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -160,6 +164,7 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(0)).getFeeds(anyString());
         assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY));
+        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -178,6 +183,7 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString()); // calls
         assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_CACHE)); // returns
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -197,6 +203,7 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString()); // calls
         assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
     @ParameterizedTest
@@ -218,12 +225,12 @@ class FeedsDownloadServiceTest {
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString()); // calls
         assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
     // TODO: UNCHEATED REFRESH CASE
     // TODO: NEW BEAN INSTANCE, EXISTING CACHE
     // TODO: CACHE READ/WRITE ERROR
-    // TODO: COUNT 'new overall delay'
     // TODO: CIRCUIT BREAKER
 
     private int getFeedsCount(){
