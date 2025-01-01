@@ -209,6 +209,11 @@ class FeedsDownloadServiceTest {
         assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
     }
 
+    // FIXME: UNCHEATED REFRESH CASE
+    // FIXME: COUNT 'new overall delay'
+    // FIXME: FALLBACK CASE
+    // FIXME: CIRCUIT BREAKER
+
     private int getFeedsCount(){
         return (int) feedsConfigService.getFeedsGroups().stream().mapToLong(g -> g.getGroupFeeds().size()).sum();
     }
