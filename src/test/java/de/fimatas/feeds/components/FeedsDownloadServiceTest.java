@@ -1,5 +1,6 @@
 package de.fimatas.feeds.components;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -48,6 +49,7 @@ class FeedsDownloadServiceTest {
     void beforeEach() {
         //noinspection LoggerInitializedWithForeignClass
         logger = (Logger) LoggerFactory.getLogger(FeedsDownloadService.class);
+        logger.setLevel(Level.DEBUG);
         loggingListAppender = new ListAppender<>();
         loggingListAppender.start();
         logger.addAppender(loggingListAppender);
@@ -66,6 +68,7 @@ class FeedsDownloadServiceTest {
         FeedsCache.getInstance().destroyCache();
         System.clearProperty("active.profile");
 
+        logger.setLevel(null);
         logger.detachAppender(loggingListAppender);
         loggingListAppender.stop();
     }
