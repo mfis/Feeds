@@ -7,5 +7,6 @@ public class FeedsLogMessages {
     public static final String REFRESH_SCHEDULER_DAILY_END_TIME_REACHED = "refreshScheduler daily end time reached";
     public static final String CACHE_IS_NOT_VALID = "cache is not valid!";
     public static final String SKIPPING_REFRESH_CACHE = "skipping refresh (cache)";
+    public static final String SKIPPING_REFRESH_METHOD_CALL = "skipping refresh (method call)";
 
 }

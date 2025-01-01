@@ -130,7 +130,7 @@ public class FeedsDownloadService {
         // check interval against method call
         if(groupCache.getLastRefreshMethodCall() != null &&
                 Duration.between(groupCache.getLastRefreshMethodCall(), feedsTimer.localDateTimeNow()).toMinutes() < groupConfig.getGroupDefaultDurationMinutes()){
-            log.debug("group '" + groupConfig.getGroupId() + "' skipping refresh (method call): " + groupCache.getLastRefreshMethodCall());
+            log.debug("group '" + groupConfig.getGroupId() + "' " + SKIPPING_REFRESH_METHOD_CALL + ": " + groupCache.getLastRefreshMethodCall());
             return false;
         }
 
