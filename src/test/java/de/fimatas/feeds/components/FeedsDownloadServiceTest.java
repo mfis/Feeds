@@ -14,6 +14,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -78,11 +80,12 @@ class FeedsDownloadServiceTest {
         loggingListAppender.stop();
     }
 
-    @Test
-    void refreshScheduler_OutOfTimeDailyStartTime() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_OutOfTimeDailyStartTime(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofHours(-8)); // 04:00
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         // Act
         feedsDownloadService.refreshScheduler();
         // Assert
@@ -90,11 +93,12 @@ class FeedsDownloadServiceTest {
         assertEquals(1, countLogging(REFRESH_SCHEDULER_DAILY_START_TIME_NOT_REACHED));
     }
 
-    @Test
-    void refreshScheduler_OutOfTimeDailyEndTime() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_OutOfTimeDailyEndTime(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofHours(11).plusMinutes(30)); // 23:30
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         // Act
         feedsDownloadService.refreshScheduler();
         // Assert
@@ -102,11 +106,12 @@ class FeedsDownloadServiceTest {
         assertEquals(1, countLogging(REFRESH_SCHEDULER_DAILY_END_TIME_REACHED));
     }
 
-    @Test
-    void refreshScheduler_InvalidCache() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_InvalidCache(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         FeedsCache.getInstance().invalidateCache();
         // Act
         feedsDownloadService.refreshScheduler();
@@ -115,22 +120,24 @@ class FeedsDownloadServiceTest {
         assertEquals(1, countLogging(CACHE_IS_NOT_VALID));
     }
 
-    @Test
-    void refreshScheduler_callOnce() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callOnce(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         // Act
         feedsDownloadService.refreshScheduler();
         // Assert
         verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
     }
 
-    @Test
-    void refreshScheduler_callMultipleSimple() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleSimple(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> feedsDownloadService.refreshScheduler());
         // Assert
@@ -138,12 +145,13 @@ class FeedsDownloadServiceTest {
         assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY));
     }
 
-    @Test
-    void refreshScheduler_callMultipleSimpleWithException() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleSimpleWithException(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler();
-        feedsConfigService.getFeedsGroups().set(0, null);
+        arrangeTestRefreshScheduler(errorType);
+        feedsConfigService.getFeedsGroups().set(0, null); // <<--
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
             feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
@@ -154,11 +162,12 @@ class FeedsDownloadServiceTest {
         assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY));
     }
 
-    @Test
-    void refreshScheduler_callMultipleSCheckIntervalAgainstCache() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleCheckIntervalAgainstCache(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         arrangeDefaultRefreshDuration(1000);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
@@ -171,11 +180,12 @@ class FeedsDownloadServiceTest {
         assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_CACHE)); // returns
     }
 
-    @Test
-    void refreshScheduler_callMultipleSCheckIntervalAgainstMethodCallWithEmptyGroup() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleCheckIntervalAgainstMethodCallWithEmptyGroup(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         arrangeDefaultRefreshDuration(1000);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
@@ -189,11 +199,12 @@ class FeedsDownloadServiceTest {
         assertEquals((COUNT_MULTIPLE_CALLS * getGroupsCount()) - getGroupsCount(), countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
     }
 
-    @Test
-    void refreshScheduler_callMultipleSCheckIntervalAgainstMethodCallOldFeedTimestamp() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleCheckIntervalAgainstMethodCallOldFeedTimestamp(int errorType) {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler();
+        arrangeTestRefreshScheduler(errorType);
         arrangeDefaultRefreshDuration(100);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
@@ -213,7 +224,6 @@ class FeedsDownloadServiceTest {
     // TODO: NEW BEAN INSTANCE, EXISTING CACHE
     // TODO: CACHE READ/WRITE ERROR
     // TODO: COUNT 'new overall delay'
-    // TODO: FALLBACK CASE
     // TODO: CIRCUIT BREAKER
 
     private int getFeedsCount(){
@@ -245,11 +255,16 @@ class FeedsDownloadServiceTest {
         lenient().when(feedsTimer.zonedDateTimeNow()).thenReturn(base.plus(temporalAmount).atZone(ZoneId.systemDefault()));
     }
 
-    private void arrangeTestRefreshScheduler() {
+    private void arrangeTestRefreshScheduler(int errorType) {
         feedsDownloadService.init();
         FeedsHttpClientResponse mockResponse = new FeedsHttpClientResponse(new HashMap<>(), minimalFeed(false));
         lenient().when(feedsHttpClient.getFeeds(anyString())).thenReturn(mockResponse);
         lenient().when(feedsProcessingService.processFeed(any(), any())).thenReturn(minimalFeed(true));
+        if(errorType==1){
+            lenient().when(feedsHttpClient.getFeeds(anyString())).thenThrow(new RuntimeException("test exception httpclient"));
+        }else if(errorType == 2){
+            lenient().when(feedsProcessingService.processFeed(any(), any())).thenThrow(new RuntimeException("test exception processing"));
+        }
     }
 
     private void arrangeDefaultRefreshDuration(int minutes) {
