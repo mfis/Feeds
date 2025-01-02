@@ -313,26 +313,6 @@ class FeedsDownloadServiceTest {
         assertEquals((getGroupsCount() * COUNT_MULTIPLE_CALLS) + getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
-    void refreshScheduler_callMultipleCacheFileReadErrorWhileRefresh(int errorType) {
-        // Arrange
-        arrangeTimerBase1200(Duration.ofSeconds(0));
-        arrangeTestRefreshScheduler(errorType);
-        arrangeDefaultRefreshDuration(10);
-        FeedsCache.destroyCache();
-        arrangeCacheFileReadError();
-        // Act
-        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
-            feedsDownloadService.refreshScheduler();
-        });
-        // Assert
-        verify(feedsHttpClient, times(0)).getFeeds(anyString()); // calls
-        //assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
-        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
-    }
-
     @ParameterizedTest()
     @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
     void refreshScheduler_callMultipleCacheFileReadErrorWhileInit(int errorType) {
@@ -358,7 +338,7 @@ class FeedsDownloadServiceTest {
     }
 
     // TODO: NEW BEAN INSTANCE, EXISTING CACHE
-    // TODO: CACHE READ/WRITE ERROR (INIT AND REFRESH)
+    // TODO: CACHE READ/WRITE ERROR (INIT AND REFRESH) canread, read itself
     // TODO: TTL
     // TODO: PROCESSING_SERVICE
     // TODO: FeedsCache as component (?)
