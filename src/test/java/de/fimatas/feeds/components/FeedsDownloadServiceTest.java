@@ -7,8 +7,12 @@ import ch.qos.logback.core.read.ListAppender;
 import com.rometools.rome.feed.rss.Channel;
 import com.rometools.rome.io.WireFeedOutput;
 import de.fimatas.feeds.model.FeedsCache;
+import de.fimatas.feeds.model.FeedsCircuitBreaker;
 import de.fimatas.feeds.model.FeedsConfig;
 import de.fimatas.feeds.model.FeedsHttpClientResponse;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +30,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAmount;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
 import static de.fimatas.feeds.model.FeedsLogMessages.*;
@@ -263,7 +269,6 @@ class FeedsDownloadServiceTest {
             feedsDownloadService.refreshScheduler();
         });
         // Assert
-
         verify(feedsHttpClient, times(getFeedsCount() * cb.getCircuitBreakerConfig().getMinimumNumberOfCalls())).getFeeds(anyString()); // calls
         assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
         assertEquals(getGroupsCount() * COUNT_MULTIPLE_CALLS, countLogging(NEW_OVERALL_DELAY));
@@ -271,11 +276,12 @@ class FeedsDownloadServiceTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2}) // 1=httpClient, 2=processing
-    void refreshScheduler_callMultipleWithErrorForCircuitBreakerWithTransitionToClosedState(int errorType) {
+    void refreshScheduler_callMultipleWithErrorForCircuitBreakerWithTransitionToClosedState(int errorType) throws InterruptedException {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
         arrangeTestRefreshScheduler(errorType);
         arrangeDefaultRefreshDuration(10);
+        arrangeTestCircuitBreaker();
         var fc = new FeedsConfig.FeedConfig();
         fc.setKey("key");
         var cb = new FeedsDownloadCircuitBreaker().getCircuitBreaker(fc);
@@ -285,20 +291,24 @@ class FeedsDownloadServiceTest {
             feedsDownloadService.refreshScheduler();
         });
         // Assert
-
-        verify(feedsHttpClient, times(getFeedsCount() * cb.getCircuitBreakerConfig().getMinimumNumberOfCalls())).getFeeds(anyString()); // calls
+        var numberOfExpectedHttpCalls = getFeedsCount() * cb.getCircuitBreakerConfig().getMinimumNumberOfCalls();
+        verify(feedsHttpClient, times(numberOfExpectedHttpCalls)).getFeeds(anyString()); // calls
         assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
         assertEquals(getGroupsCount() * COUNT_MULTIPLE_CALLS, countLogging(NEW_OVERALL_DELAY));
 
-        arrangeTimerBase1200(Duration.ofHours(7)); // FIXME: inject own CircuitBreaker
+        arrangeTimerBase1200(Duration.ofHours(4));
+        Thread.sleep(2010L);
+
         feedsDownloadService.refreshScheduler();
-        verify(feedsHttpClient, times(getFeedsCount() * (cb.getCircuitBreakerConfig().getMinimumNumberOfCalls() + 1))).getFeeds(anyString()); // calls
-        // FIXME: other asserts
+        verify(feedsHttpClient, times(numberOfExpectedHttpCalls + getFeedsCount())).getFeeds(anyString()); // calls
+        assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+        assertEquals((getGroupsCount() * COUNT_MULTIPLE_CALLS) + getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
     // TODO: NEW BEAN INSTANCE, EXISTING CACHE
     // TODO: CACHE READ/WRITE ERROR
-    // TODO: CIRCUIT BREAKER
+    // TODO: TTL
+    // TODO: PROCESSING_SERVICE
 
     private int getFeedsCount(){
         return (int) feedsConfigService.getFeedsGroups().stream().mapToLong(g -> g.getGroupFeeds().size()).sum();
@@ -343,5 +353,32 @@ class FeedsDownloadServiceTest {
 
     private void arrangeDefaultRefreshDuration(int minutes) {
         feedsConfigService.getFeedsGroups().forEach(g -> g.setGroupDefaultDurationMinutes(minutes));
+    }
+
+    private void arrangeTestCircuitBreaker() {
+        feedsDownloadService.feedsDownloadCircuitBreaker = new FeedsTestCircuitBreaker();
+    }
+
+    private static class FeedsTestCircuitBreaker implements FeedsCircuitBreaker {
+
+        private final CircuitBreakerRegistry circuitBreakerRegistry;
+        private final Map<String, CircuitBreaker> circuitBreakerMap = new ConcurrentHashMap<>();
+
+        public FeedsTestCircuitBreaker() {
+            CircuitBreakerConfig defaultConfig = CircuitBreakerConfig.custom()
+                    .failureRateThreshold(66)
+                    .slidingWindowSize(3)
+                    .waitDurationInOpenState(Duration.ofSeconds(2)) // <<--
+                    .permittedNumberOfCallsInHalfOpenState(1)
+                    .minimumNumberOfCalls(3)
+                    .automaticTransitionFromOpenToHalfOpenEnabled(true)
+                    .build();
+            this.circuitBreakerRegistry = CircuitBreakerRegistry.of(defaultConfig);
+        }
+
+        public CircuitBreaker getCircuitBreaker(FeedsConfig.FeedConfig feedConfig) {
+            return circuitBreakerMap.computeIfAbsent(feedConfig.getKey(),
+                    key -> circuitBreakerRegistry.circuitBreaker("FeedsDownloadCircuitBreaker-" + key));
+        }
     }
 }

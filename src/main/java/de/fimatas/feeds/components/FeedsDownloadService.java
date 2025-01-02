@@ -4,10 +4,7 @@ import com.rometools.rome.feed.WireFeed;
 import com.rometools.rome.feed.rss.Channel;
 import com.rometools.rome.io.FeedException;
 import com.rometools.rome.io.WireFeedInput;
-import de.fimatas.feeds.model.FeedsCache;
-import de.fimatas.feeds.model.FeedsConfig;
-import de.fimatas.feeds.model.FeedsHttpClientResponse;
-import de.fimatas.feeds.model.TtlInfo;
+import de.fimatas.feeds.model.*;
 import de.fimatas.feeds.util.FeedsUtil;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import jakarta.annotation.PostConstruct;
@@ -51,7 +48,7 @@ public class FeedsDownloadService {
     private final LocalTime dailyStartTime = LocalTime.of(5, 20);
     private final LocalTime dailyEndTime = LocalTime.of(22, 30);
 
-    private final FeedsDownloadCircuitBreaker feedsDownloadCircuitBreaker = new FeedsDownloadCircuitBreaker();
+    protected FeedsCircuitBreaker feedsDownloadCircuitBreaker = new FeedsDownloadCircuitBreaker();
 
     @PostConstruct
     protected void init() {
