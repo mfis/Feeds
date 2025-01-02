@@ -74,7 +74,7 @@ public class FeedsDownloadService {
                 FeedsCache.getInstance().writeToCacheFile();
             }
         } catch (Exception e) {
-            FeedsCache.getInstance().setExceptionTimestampAndWriteToFile();
+            FeedsCache.setExceptionTimestampAndWriteToFile();
             log.warn("refreshScheduler caught exception", e);
         }
     }

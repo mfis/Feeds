@@ -7,7 +7,6 @@ import lombok.SneakyThrows;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -28,7 +27,12 @@ public class FeedsCache {
 
     public static synchronized FeedsCache getInstance() {
         if (instance == null) {
-            instance = new FeedsCache();
+            try {
+                instance = new FeedsCache();
+            }catch (Throwable t){
+                instance = null;
+                throw t;
+            }
         }
         return instance;
     }
@@ -91,9 +95,9 @@ public class FeedsCache {
         if(file.exists() && file.length() > 0){
             try {
                 cache = objectMapper.readValue(file, FeedsCacheRoot.class);
-            } catch (IOException e) {
+            } catch (Throwable t) {
                 cache = null;
-                throw new RuntimeException("Cache could not be read", e);
+                throw new RuntimeException("Cache could not be read", t);
             }
         }else {
             cache = new FeedsCacheRoot();
@@ -108,35 +112,39 @@ public class FeedsCache {
         var file = lookupCacheFile();
         try {
             objectMapper.writeValue(file, cache);
-        } catch (IOException e) {
+        } catch (Throwable t) {
             cache = null;
-            throw new RuntimeException("Cache could not be written", e);
+            throw new RuntimeException("Cache could not be written", t);
         }
     }
 
-    public void setExceptionTimestampAndWriteToFile() {
-        cache.setLastException(LocalDateTime.now());
-        writeToCacheFile();
+    public static void setExceptionTimestampAndWriteToFile() {
+        if(instance != null){
+            instance.cache.setLastException(LocalDateTime.now());
+            instance.writeToCacheFile();
+        }
     }
 
     public LocalDateTime getExceptionTimestamp() {
         return cache.getLastException();
     }
 
-    private File lookupCacheFile(){
+    public static File lookupCacheFile(){
         var profile = System.getProperty("active.profile", "");
         return Path.of(System.getProperty("user.home") + "/Documents/config/feeds/cache" + profile +".json").toFile();
     }
 
-    public void destroyCache() {
+    public static void destroyCache() {
         assert System.getProperty("active.profile", "").equals("test");
         FileUtils.deleteQuietly(lookupCacheFile());
         instance = null;
     }
 
-    public void invalidateCache() {
+    public static void invalidateCache() {
         assert System.getProperty("active.profile", "").equals("test");
-        cache = null;
+        if(instance != null){
+            instance.cache = null;
+        }
     }
 
     @Data

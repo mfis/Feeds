@@ -14,6 +14,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import lombok.SneakyThrows;
+import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
@@ -25,9 +26,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.nio.charset.StandardCharsets;
+import java.time.*;
 import java.time.temporal.TemporalAmount;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
 import static de.fimatas.feeds.model.FeedsLogMessages.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,10 +56,18 @@ class FeedsDownloadServiceTest {
     private Logger logger;
     private ListAppender<ILoggingEvent> loggingListAppender;
 
+    private LocalDateTime testLocalDateTime;
+    private LocalTime testLocalTime;
+    private ZonedDateTime testZonedDateTime;
+
+
     private final static int COUNT_MULTIPLE_CALLS = 20;
 
     @BeforeEach
     void beforeEach() {
+        testLocalDateTime = null;
+        testLocalTime = null;
+        testZonedDateTime = null;
         //noinspection LoggerInitializedWithForeignClass
         logger = (Logger) LoggerFactory.getLogger(FeedsDownloadService.class);
         logger.setLevel(Level.DEBUG);
@@ -68,7 +76,7 @@ class FeedsDownloadServiceTest {
         logger.addAppender(loggingListAppender);
 
         System.setProperty("active.profile", "test");
-        FeedsCache.getInstance().destroyCache();
+        FeedsCache.destroyCache();
         MockitoAnnotations.openMocks(this);
 
         feedsConfigService = new FeedsConfigService();
@@ -78,7 +86,7 @@ class FeedsDownloadServiceTest {
 
     @AfterEach
     void afterEach() {
-        FeedsCache.getInstance().destroyCache();
+        FeedsCache.destroyCache();
         System.clearProperty("active.profile");
 
         logger.setLevel(null);
@@ -120,7 +128,7 @@ class FeedsDownloadServiceTest {
         // Arrange
         arrangeTimerBase1200(Duration.ofSeconds(0));
         arrangeTestRefreshScheduler(errorType);
-        FeedsCache.getInstance().invalidateCache();
+        FeedsCache.invalidateCache();
         // Act
         feedsDownloadService.refreshScheduler();
         // Assert
@@ -165,7 +173,7 @@ class FeedsDownloadServiceTest {
         feedsConfigService.getFeedsGroups().set(0, null); // <<--
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
+            feedsDownloadService.lastSchedulerRun = testLocalDateTime.minusDays(1);
             feedsDownloadService.refreshScheduler();
         });
         // Assert
@@ -184,7 +192,7 @@ class FeedsDownloadServiceTest {
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
             arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
-            feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
+            feedsDownloadService.lastSchedulerRun = testLocalDateTime.minusDays(1);
             feedsDownloadService.refreshScheduler();
         });
         // Assert
@@ -203,7 +211,7 @@ class FeedsDownloadServiceTest {
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
             arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
-            feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
+            feedsDownloadService.lastSchedulerRun = testLocalDateTime.minusDays(1);
             feedsDownloadService.refreshScheduler();
             feedsConfigService.getFeedsGroups().forEach(fg -> FeedsCache.getInstance().lookupGroup(fg.getGroupId()).getGroupFeeds().clear()); // cheat feed update timestamp
         });
@@ -223,7 +231,7 @@ class FeedsDownloadServiceTest {
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
             arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
-            feedsDownloadService.lastSchedulerRun = LocalDateTime.now().minusDays(1);
+            feedsDownloadService.lastSchedulerRun = testLocalDateTime.minusDays(1);
             feedsDownloadService.refreshScheduler();
             feedsConfigService.getFeedsGroups().forEach(fg
                     -> FeedsCache.getInstance().lookupGroup(fg.getGroupId()).getGroupFeeds().forEach((k, v)
@@ -305,10 +313,55 @@ class FeedsDownloadServiceTest {
         assertEquals((getGroupsCount() * COUNT_MULTIPLE_CALLS) + getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleCacheFileReadErrorWhileRefresh(int errorType) {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        arrangeDefaultRefreshDuration(10);
+        FeedsCache.destroyCache();
+        arrangeCacheFileReadError();
+        // Act
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            feedsDownloadService.refreshScheduler();
+        });
+        // Assert
+        verify(feedsHttpClient, times(0)).getFeeds(anyString()); // calls
+        //assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
+        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
+    }
+
+    @ParameterizedTest()
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleCacheFileReadErrorWhileInit(int errorType) {
+        try {
+            // Arrange
+            FeedsCache.destroyCache();
+            arrangeCacheFileReadError();
+            beforeEach();
+            arrangeCacheFileReadError();
+            arrangeTimerBase1200(Duration.ofSeconds(0));
+            arrangeTestRefreshScheduler(errorType);
+            arrangeDefaultRefreshDuration(10);
+            // Act
+            IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+                arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+                feedsDownloadService.refreshScheduler();
+            });
+            // Assert
+            fail();
+        } catch (Exception e) {
+            assertTrue(true);
+        }
+    }
+
     // TODO: NEW BEAN INSTANCE, EXISTING CACHE
-    // TODO: CACHE READ/WRITE ERROR
+    // TODO: CACHE READ/WRITE ERROR (INIT AND REFRESH)
     // TODO: TTL
     // TODO: PROCESSING_SERVICE
+    // TODO: FeedsCache as component (?)
 
     private int getFeedsCount(){
         return (int) feedsConfigService.getFeedsGroups().stream().mapToLong(g -> g.getGroupFeeds().size()).sum();
@@ -334,9 +387,13 @@ class FeedsDownloadServiceTest {
 
     private void arrangeTimerBase1200(TemporalAmount temporalAmount) {
         LocalDateTime base = LocalDateTime.of(2025, 1, 1, 12, 0);
-        lenient().when(feedsTimer.localDateTimeNow()).thenReturn(base.plus(temporalAmount));
-        lenient().when(feedsTimer.localTimeNow()).thenReturn(base.toLocalTime().plus(temporalAmount));
-        lenient().when(feedsTimer.zonedDateTimeNow()).thenReturn(base.plus(temporalAmount).atZone(ZoneId.systemDefault()));
+        testLocalDateTime = base.plus(temporalAmount);
+        testLocalTime = base.toLocalTime().plus(temporalAmount);
+        testZonedDateTime = base.plus(temporalAmount).atZone(ZoneId.systemDefault());
+        lenient().when(feedsTimer.localDateTimeNow()).thenReturn(testLocalDateTime);
+        lenient().when(feedsTimer.localTimeNow()).thenReturn(testLocalTime);
+        lenient().when(feedsTimer.zonedDateTimeNow()).thenReturn(testZonedDateTime);
+
     }
 
     private void arrangeTestRefreshScheduler(int errorType) {
@@ -357,6 +414,11 @@ class FeedsDownloadServiceTest {
 
     private void arrangeTestCircuitBreaker() {
         feedsDownloadService.feedsDownloadCircuitBreaker = new FeedsTestCircuitBreaker();
+    }
+
+    @SneakyThrows
+    private void arrangeCacheFileReadError() {
+        FileUtils.writeStringToFile(FeedsCache.lookupCacheFile(), "---", StandardCharsets.UTF_8);
     }
 
     private static class FeedsTestCircuitBreaker implements FeedsCircuitBreaker {
