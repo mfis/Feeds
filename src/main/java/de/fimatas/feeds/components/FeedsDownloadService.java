@@ -22,6 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static de.fimatas.feeds.model.FeedsLogMessages.*;
 
@@ -102,7 +103,7 @@ public class FeedsDownloadService {
             return true;
         }
         if (FeedsCache.getInstance().getExceptionTimestamp() != null && FeedsCache.getInstance().getExceptionTimestamp()
-                .plus(minimumSchedulerRunDuration).isAfter(feedsTimer.localDateTimeNow())) {
+                .plus(getMaxRequestDelay()).isAfter(feedsTimer.localDateTimeNow())) {
             log.warn(REFRESH_SCHEDULER_WITH_EXCEPTION_CALLED_TOO_FREQUENTLY);
             return true;
         }
@@ -308,6 +309,16 @@ public class FeedsDownloadService {
             }
         }
         return null;
+    }
+
+    private Duration getMaxRequestDelay(){
+        try {
+            return Duration.ofMinutes(feedsConfigService.getFeedsGroups().stream().map(FeedsConfig.FeedsGroup::getGroupDefaultDurationMinutes)
+                    .toList().stream().max(Comparator.naturalOrder()).orElseThrow());
+        } catch (Exception e) {
+            log.warn("could not get max response delay", e);
+            return Duration.ofMinutes(90);
+        }
     }
 
 }

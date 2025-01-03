@@ -382,7 +382,39 @@ class FeedsDownloadServiceTest {
         assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
     }
 
-    // TODO: NEW BEAN INSTANCE, EXISTING CACHE
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callOnceNewInstanceCallAgain(int errorType) {
+        // Arrange 1 (call)
+        arrangeTimerBase1200(Duration.ofMinutes(0));
+        arrangeTestRefreshScheduler(errorType);
+        arrangeDefaultRefreshDuration(90);
+        // Act 1
+        feedsDownloadService.refreshScheduler();
+        // Assert 1
+        verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
+
+        // Arrange 2 (skip call)
+        // new instance
+        feedsDownloadService.init();
+        arrangeTimerBase1200(Duration.ofMinutes(30));
+        // Act 2
+        feedsDownloadService.refreshScheduler();
+        // Assert 2
+        verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
+
+        // Arrange 3 (call again)
+        // new instance
+        arrangeTimerBase1200(Duration.ofMinutes(95));
+        // Act 3
+        feedsDownloadService.refreshScheduler();
+        // Assert 3
+        verify(feedsHttpClient, times(getFeedsCount() * 2)).getFeeds(anyString());
+        assertEquals(getGroupsCount() * 2, countLogging(NEW_OVERALL_DELAY ));
+    }
+
     // TODO: TTL
     // TODO: PROCESSING_SERVICE
 
