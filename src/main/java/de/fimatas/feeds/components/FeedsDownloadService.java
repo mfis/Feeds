@@ -53,7 +53,9 @@ public class FeedsDownloadService {
     @PostConstruct
     protected void init() {
         lastSchedulerRun = feedsTimer.localDateTimeNow().minus(minimumSchedulerRunDuration).minusSeconds(1);
-        FeedsCache.getInstance().checkCacheFile();
+        if(FeedsCache.getInstance().isNotValid()){
+            throw new IllegalStateException("FeedsCache is not valid");
+        }
     }
 
     @Scheduled(initialDelay = 1000 * 2, fixedDelayString = schedulerDelayString)
@@ -81,6 +83,11 @@ public class FeedsDownloadService {
 
     private boolean skip() {
 
+        if(FeedsCache.getInstance().isNotValid()){
+            log.warn(CACHE_IS_NOT_VALID);
+            return true;
+        }
+
         var now = feedsTimer.localTimeNow();
         if (now.isBefore(dailyStartTime)) {
             log.debug(REFRESH_SCHEDULER_DAILY_START_TIME_NOT_REACHED);
@@ -88,10 +95,6 @@ public class FeedsDownloadService {
         }
         if (now.isAfter(dailyEndTime)) {
             log.debug(REFRESH_SCHEDULER_DAILY_END_TIME_REACHED);
-            return true;
-        }
-        if (FeedsCache.getInstance().isNotValid()) {
-            log.warn(CACHE_IS_NOT_VALID);
             return true;
         }
         if (lastSchedulerRun.plus(minimumSchedulerRunDuration).isAfter(feedsTimer.localDateTimeNow())) {

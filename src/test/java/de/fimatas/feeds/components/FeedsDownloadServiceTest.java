@@ -21,12 +21,16 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedStatic;
 import org.slf4j.LoggerFactory;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.*;
 import java.time.temporal.TemporalAmount;
 import java.util.HashMap;
@@ -337,11 +341,50 @@ class FeedsDownloadServiceTest {
         }
     }
 
+    @ParameterizedTest()
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleCacheFileWriteErrorNotWriteable(int errorType) {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        arrangeDefaultRefreshDuration(10);
+        // Act
+        IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            arrangeCacheFileWriteErrorFileNotWriteable(); // <<--
+            feedsDownloadService.refreshScheduler();
+        });
+        // Assert
+        verify(feedsHttpClient, times(0)).getFeeds(anyString());
+        assertEquals(COUNT_MULTIPLE_CALLS, countLogging(CACHE_IS_NOT_VALID));
+        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
+    }
+
+    @ParameterizedTest()
+    @ValueSource(ints = {0, 1, 2}) // 0=none, 1=httpClient, 2=processing
+    void refreshScheduler_callMultipleCacheFileWriteErrorNoSpaceLeft(int errorType) {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        arrangeDefaultRefreshDuration(10);
+        try (MockedStatic<Files> mockedFiles = mockStatic(Files.class)) {
+            mockedFiles.when(() -> Files.writeString(any(Path.class), any(String.class)))
+                    .thenThrow(new IOException("No space left on device"));
+            // Act
+            IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
+                arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+                feedsDownloadService.refreshScheduler();
+            });
+        }
+        // Assert
+        verify(feedsHttpClient, times(getFeedsCount())).getFeeds(anyString());
+        assertEquals(COUNT_MULTIPLE_CALLS - 1, countLogging(CACHE_IS_NOT_VALID));
+        assertEquals(getGroupsCount(), countLogging(NEW_OVERALL_DELAY));
+    }
+
     // TODO: NEW BEAN INSTANCE, EXISTING CACHE
-    // TODO: CACHE READ/WRITE ERROR (INIT AND REFRESH) canread, read itself
     // TODO: TTL
     // TODO: PROCESSING_SERVICE
-    // TODO: FeedsCache as component (?)
 
     private int getFeedsCount(){
         return (int) feedsConfigService.getFeedsGroups().stream().mapToLong(g -> g.getGroupFeeds().size()).sum();
@@ -399,6 +442,13 @@ class FeedsDownloadServiceTest {
     @SneakyThrows
     private void arrangeCacheFileReadError() {
         FileUtils.writeStringToFile(FeedsCache.lookupCacheFile(), "---", StandardCharsets.UTF_8);
+    }
+
+    @SneakyThrows
+    private void arrangeCacheFileWriteErrorFileNotWriteable() {
+        if(!FeedsCache.lookupCacheFile().setWritable(false)){
+            throw new RuntimeException("error with arrangeCacheFileWriteError");
+        }
     }
 
     private static class FeedsTestCircuitBreaker implements FeedsCircuitBreaker {

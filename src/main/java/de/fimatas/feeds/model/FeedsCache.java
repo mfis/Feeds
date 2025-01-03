@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Data;
 import lombok.SneakyThrows;
+import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -14,9 +16,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+@CommonsLog
 public class FeedsCache {
-
-    private static FeedsCache instance;
 
     private FeedsCache() {
         super();
@@ -37,25 +38,41 @@ public class FeedsCache {
         return instance;
     }
 
+    private static FeedsCache instance;
     private FeedsCacheRoot cache = null;
-
     private final ObjectMapper objectMapper;
+    private boolean readError = false;
+    private boolean writeError = false;
+    private boolean cacheError = false;
+
 
     @SneakyThrows
-    public void checkCacheFile(){
+    public boolean isNotValid() {
+        if(readError || writeError || cacheError) {
+            return true;
+        }
         var file = lookupCacheFile();
         if(!file.exists()){
             FileUtils.touch(file);
         }
         if(file.exists()){
-            if(!file.isFile() || !file.canRead() || !file.canWrite()){
-                throw new RuntimeException("Cache file is not file/readable/writable");
+            if(!file.isFile() || !file.canRead() ){
+                log.error("Cache file is not file/readable");
+                readError = true;
+                return true;
+            }
+            if(!file.canWrite()){
+                log.error("Cache file is not writable");
+                writeError = true;
+                return true;
             }
         }
-    }
-
-    public boolean isNotValid() {
-        return cache == null;
+        if(cache == null) {
+            log.error("Cache is null");
+            cacheError = true;
+            return true;
+        }
+        return false;
     }
 
     public void updateGroupFeeds(FeedsCacheGroup group, Map<String, FeedsCache.FeedCacheEntry> newGroupFeeds) {
@@ -90,6 +107,7 @@ public class FeedsCache {
         var file = lookupCacheFile();
         if(cache != null){
             cache = null;
+            cacheError = true;
             throw new RuntimeException("Cache object already existed!");
         }
         if(file.exists() && file.length() > 0){
@@ -97,6 +115,7 @@ public class FeedsCache {
                 cache = objectMapper.readValue(file, FeedsCacheRoot.class);
             } catch (Throwable t) {
                 cache = null;
+                readError = true;
                 throw new RuntimeException("Cache could not be read", t);
             }
         }else {
@@ -107,21 +126,27 @@ public class FeedsCache {
 
     public synchronized void writeToCacheFile() {
         if(cache == null){
+            cacheError = true;
             throw new RuntimeException("Cache object is null!");
         }
         var file = lookupCacheFile();
         try {
-            objectMapper.writeValue(file, cache);
+            var json = objectMapper.writeValueAsString(cache);
+            Files.writeString(file.toPath(), json);
         } catch (Throwable t) {
-            cache = null;
+            writeError = true;
             throw new RuntimeException("Cache could not be written", t);
         }
     }
 
     public static void setExceptionTimestampAndWriteToFile() {
-        if(instance != null){
+        if(instance != null && instance.cache != null) {
             instance.cache.setLastException(LocalDateTime.now());
-            instance.writeToCacheFile();
+            try {
+                instance.writeToCacheFile();
+            } catch (Throwable t) {
+                log.debug("could not save setExceptionTimestampAndWriteToFile");
+            }
         }
     }
 
