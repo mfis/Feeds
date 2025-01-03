@@ -197,7 +197,7 @@ public class FeedsDownloadService {
         if(groupCache.getGroupFeeds().containsKey(feedConfig.getKey())){
            refreshedCache.put(feedConfig.getKey(), groupCache.getGroupFeeds().get(feedConfig.getKey()));
         }else{
-            newEmptyFeedCacheEntry(groupConfig, feedConfig, null, new FeedsHttpClientResponse(null, null), refreshedCache);
+            newEmptyFeedCacheEntry(groupConfig, feedConfig, null, new FeedsHttpClientResponse(null, -1, null), refreshedCache);
         }
         refreshedCache.get(feedConfig.getKey()).increaseRefreshErrorCounter();
     }

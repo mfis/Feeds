@@ -1,6 +1,7 @@
 package de.fimatas.feeds.configuration;
 
 import de.fimatas.feeds.components.*;
+import de.fimatas.feeds.controller.ExampleController;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -30,5 +31,10 @@ public class FeedsConfiguration {
     @Bean
     public FeedsDownloadService feedsDownloadService() {
         return new FeedsDownloadService(feedsConfigService(), feedsProcessingService(), feedsHttpClient(), feedsTimer());
+    }
+
+    @Bean
+    public ExampleController exampleController() {
+        return new ExampleController(feedsTimer());
     }
 }

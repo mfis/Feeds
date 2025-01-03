@@ -6,15 +6,17 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.rometools.rome.feed.rss.Channel;
 import com.rometools.rome.io.WireFeedOutput;
+import de.fimatas.feeds.controller.ExampleController;
 import de.fimatas.feeds.model.FeedsCache;
 import de.fimatas.feeds.model.FeedsCircuitBreaker;
 import de.fimatas.feeds.model.FeedsConfig;
-import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
@@ -28,12 +30,13 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.*;
 import java.time.temporal.TemporalAmount;
-import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
@@ -255,7 +258,7 @@ class FeedsDownloadServiceTest {
         arrangeDefaultRefreshDuration(10);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            arrangeTimerBase1200(Duration.ofMinutes(15).multipliedBy(i + 1));
             feedsDownloadService.refreshScheduler();
         });
         // Assert
@@ -276,7 +279,7 @@ class FeedsDownloadServiceTest {
         var cb = new FeedsDownloadCircuitBreaker().getCircuitBreaker(fc);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            arrangeTimerBase1200(Duration.ofMinutes(15).multipliedBy(i + 1));
             feedsDownloadService.refreshScheduler();
         });
         // Assert
@@ -298,7 +301,7 @@ class FeedsDownloadServiceTest {
         var cb = new FeedsDownloadCircuitBreaker().getCircuitBreaker(fc);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            arrangeTimerBase1200(Duration.ofMinutes(15).multipliedBy(i + 1));
             feedsDownloadService.refreshScheduler();
         });
         // Assert
@@ -307,7 +310,7 @@ class FeedsDownloadServiceTest {
         assertEquals(0, countLogging(SKIPPING_REFRESH_METHOD_CALL)); // returns
         assertEquals(getGroupsCount() * COUNT_MULTIPLE_CALLS, countLogging(NEW_OVERALL_DELAY));
 
-        arrangeTimerBase1200(Duration.ofHours(4));
+        arrangeTimerBase1200(Duration.ofMinutes(340));
         Thread.sleep(2010L);
 
         feedsDownloadService.refreshScheduler();
@@ -330,7 +333,7 @@ class FeedsDownloadServiceTest {
             arrangeDefaultRefreshDuration(10);
             // Act
             IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-                arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+                arrangeTimerBase1200(Duration.ofMinutes(15).multipliedBy(i + 1));
                 feedsDownloadService.refreshScheduler();
             });
             // Assert
@@ -349,7 +352,7 @@ class FeedsDownloadServiceTest {
         arrangeDefaultRefreshDuration(10);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+            arrangeTimerBase1200(Duration.ofMinutes(15).multipliedBy(i + 1));
             arrangeCacheFileWriteErrorFileNotWriteable(); // <<--
             feedsDownloadService.refreshScheduler();
         });
@@ -371,7 +374,7 @@ class FeedsDownloadServiceTest {
                     .thenThrow(new IOException("No space left on device"));
             // Act
             IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-                arrangeTimerBase1200(Duration.ofMinutes(10).multipliedBy(i + 1));
+                arrangeTimerBase1200(Duration.ofMinutes(15).multipliedBy(i + 1));
                 feedsDownloadService.refreshScheduler();
             });
         }
@@ -431,6 +434,36 @@ class FeedsDownloadServiceTest {
         assertEquals(0, countLogging(NEW_OVERALL_DELAY));
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {0}) // 0=none
+    void refreshScheduler_ttl(int errorType) {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        // Act
+        feedsDownloadService.refreshScheduler();
+        // Assert
+        @AllArgsConstructor
+        class TtlTestData {
+            String group;
+            String feed;
+            long ttlMinutes;
+        }
+        var ttlTestDataList = new LinkedList<TtlTestData>();
+        ttlTestDataList.add(new TtlTestData("ExampleGroup1", "example_G1A", 1));
+        ttlTestDataList.add(new TtlTestData("ExampleGroup1", "example_G1B", 2));
+        ttlTestDataList.add(new TtlTestData("ExampleGroup1", "example_G1C", 3));
+        ttlTestDataList.add(new TtlTestData("ExampleGroup2", "example_G2D", 4));
+        ttlTestDataList.add(new TtlTestData("ExampleGroup2", "example_G2E", 5));
+        ttlTestDataList.add(new TtlTestData("ExampleGroup2", "example_G2F", 6));
+        ttlTestDataList.add(new TtlTestData("ExampleGroup2", "example_G2G", 11));
+        ttlTestDataList.add(new TtlTestData("ExampleGroup2", "example_G2H", 14));
+        ttlTestDataList.forEach(td -> {
+            var actual = FeedsCache.getInstance().lookupGroup(td.group).getGroupFeeds().get(td.feed).getTtl().getTtl().toMinutes();
+            assertEquals(td.ttlMinutes, actual, td.feed);
+        });
+    }
+
     // TODO: TTL
     // TODO: PROCESSING_SERVICE
 
@@ -447,11 +480,11 @@ class FeedsDownloadServiceTest {
     }
 
     @SneakyThrows
-    private String minimalFeed(boolean processed){
+    private String minimalFeed(){
         Channel channel = new Channel();
         channel.setFeedType("rss_2.0");
         channel.setTitle("Title");
-        channel.setDescription(processed ? "processed" : "raw");
+        channel.setDescription("processed");
         channel.setLink("http://localhost");
         return new WireFeedOutput().outputString(channel);
     }
@@ -469,13 +502,20 @@ class FeedsDownloadServiceTest {
 
     private void arrangeTestRefreshScheduler(int errorType) {
         feedsDownloadService.init();
-        FeedsHttpClientResponse mockResponse = new FeedsHttpClientResponse(new HashMap<>(), minimalFeed(false));
-        lenient().when(feedsHttpClient.getFeeds(anyString())).thenReturn(mockResponse);
-        lenient().when(feedsProcessingService.processFeed(any(), any())).thenReturn(minimalFeed(true));
-        if(errorType==1){
-            lenient().when(feedsHttpClient.getFeeds(anyString())).thenThrow(new RuntimeException("test exception httpclient"));
-        }else if(errorType == 2){
+        lenient().when(feedsHttpClient.getFeeds(anyString()))
+                .thenAnswer(invocation -> {
+                    if(errorType==1){
+                        throw new RuntimeException("test exception httpclient");
+                    }
+                    URL url = new URL(invocation.getArgument(0));
+                    var key = StringUtils.substringAfter(url.getQuery(), "key=");
+                    return new ExampleController(feedsTimer).getFeedResponse(key);
+                });
+
+        if(errorType == 2){
             lenient().when(feedsProcessingService.processFeed(any(), any())).thenThrow(new RuntimeException("test exception processing"));
+        }else {
+            lenient().when(feedsProcessingService.processFeed(any(), any())).thenReturn(minimalFeed());
         }
     }
 

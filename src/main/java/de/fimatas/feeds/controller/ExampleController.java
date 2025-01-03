@@ -5,6 +5,8 @@ import com.rometools.rome.feed.rss.Description;
 import com.rometools.rome.feed.rss.Item;
 import com.rometools.rome.io.FeedException;
 import com.rometools.rome.io.WireFeedOutput;
+import de.fimatas.feeds.components.FeedsTimer;
+import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import de.fimatas.feeds.util.FeedsUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.apachecommons.CommonsLog;
@@ -13,54 +15,78 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.HashMap;
 
 @Controller
 @RequestMapping("/example")
 @CommonsLog
 public class ExampleController {
 
+    private final FeedsTimer feedsTimer;
+
+    public ExampleController(FeedsTimer feedsTimer){
+        super();
+        this.feedsTimer = feedsTimer;
+    }
+
     @GetMapping
     @ResponseBody
     public void getDataFromExternalApi(HttpServletResponse response,
                                        @RequestParam(name = "key", required = false) String key) throws IOException, FeedException {
 
+        final var feedsResponse = getFeedResponse(key);
+        response.setStatus(feedsResponse.getStatusCode());
+        response.setContentType("application/rss+xml");
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Last-Modified", DateTimeFormatter.RFC_1123_DATE_TIME.format(feedsTimer.zonedDateTimeNow()));
+        feedsResponse.getHeaders().forEach(response::addHeader);
+        if(feedsResponse.getBody() != null) {
+            response.getWriter().print(feedsResponse.getBody());
+        }
+    }
+
+    public FeedsHttpClientResponse getFeedResponse(String key) throws FeedException {
+
+        var response = new FeedsHttpClientResponse();
+        response.setStatusCode(HttpServletResponse.SC_OK);
+        response.setHeaders(new HashMap<>());
+
         if(key.equals("example_X")){
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            return;
+            response.setStatusCode(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            return response;
         }
 
         Channel channel = new Channel();
 
         if(key.equals("example_A")){
-            channel.setTtl(10); // minutes
+            channel.setTtl(1); // minutes
         }
         if(key.equals("example_B")){
-            response.setHeader("Cache-Control", "Cache-control: max-age=1200, public"); // seconds
+            response.getHeaders().put("Cache-Control", "Cache-control: max-age=120, public"); // seconds
         }
         if(key.equals("example_C")){
-            response.setHeader("Cache-Control", "Cache-control: max-age=1200"); // seconds
+            response.getHeaders().put("Cache-Control", "Cache-control: max-age=180"); // seconds
         }
         if(key.equals("example_D")){
-            response.setHeader("Retry-After", "2400"); // seconds
+            response.getHeaders().put("Retry-After", "240"); // seconds
         }
         if(key.equals("example_E")){
-            response.setHeader("Retry-After", DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now().plusSeconds(2400))); // seconds
+            response.getHeaders().put("Retry-After", DateTimeFormatter.RFC_1123_DATE_TIME.format(feedsTimer.zonedDateTimeNow().plusSeconds(310))); // seconds
         }
 
         if(key.equals("example_F")){
             Namespace syNamespace = Namespace.getNamespace("sy", "http://localhost");
             channel.getForeignMarkup().add(FeedsUtil.createElement("updatePeriod", "hourly", syNamespace));
-            channel.getForeignMarkup().add(FeedsUtil.createElement("updateFrequency", "2", syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updateFrequency", "10", syNamespace));
         }
 
         if(key.equals("example_G")){
             Namespace syNamespace = Namespace.getNamespace("sy", "http://localhost");
             channel.getForeignMarkup().add(FeedsUtil.createElement("updatePeriod", "hourly", syNamespace));
-            channel.getForeignMarkup().add(FeedsUtil.createElement("updateFrequency", "2", syNamespace));
-            channel.getForeignMarkup().add(FeedsUtil.createElement("updateBase", DateTimeFormatter.ISO_DATE_TIME.format(ZonedDateTime.now().plusMinutes(10)), syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updateFrequency", "6", syNamespace));
+            channel.getForeignMarkup().add(FeedsUtil.createElement("updateBase", DateTimeFormatter.ISO_DATE_TIME.format(feedsTimer.zonedDateTimeNow().plusMinutes(1)), syNamespace));
         }
 
         channel.setFeedType("rss_2.0");
@@ -87,11 +113,8 @@ public class ExampleController {
         channel.getItems().add(entry1);
         channel.getItems().add(entry2);
 
-        response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType("application/rss+xml");
-        response.setCharacterEncoding("UTF-8");
-        response.setHeader("Last-Modified", Long.toString(System.currentTimeMillis()));
-        response.getWriter().print(new WireFeedOutput().outputString(channel));
+        response.setBody(new WireFeedOutput().outputString(channel));
+        return response;
     }
 
     @GetMapping("/entry/{key}")

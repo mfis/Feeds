@@ -5,7 +5,7 @@
 	"groups": [
 		{
 			"groupId": "ExampleGroup1",
-			"groupDefaultDurationMinutes": 100,
+			"groupDefaultDurationMinutes": 13,
 			"groupFeeds": [
 				{
 					"name": "example G1A",
@@ -43,7 +43,7 @@
 		},
 		{
 			"groupId": "ExampleGroup2",
-			"groupDefaultDurationMinutes": 20,
+			"groupDefaultDurationMinutes": 14,
 			"groupFeeds": [
 				{
 					"name": "example G2D",

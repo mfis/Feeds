@@ -57,7 +57,7 @@ public class FeedsHttpClient {
                 for (var header : response.getHeaders()) {
                     headers.put(header.getName(), header.getValue());
                 }
-                return new FeedsHttpClientResponse(headers, EntityUtils.toString(response.getEntity()));
+                return new FeedsHttpClientResponse(headers, statusCode, EntityUtils.toString(response.getEntity()));
             });
 
         } catch (IOException e) {
