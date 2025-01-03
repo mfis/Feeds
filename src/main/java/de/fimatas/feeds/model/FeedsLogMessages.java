@@ -9,5 +9,6 @@ public class FeedsLogMessages {
     public static final String SKIPPING_REFRESH_CACHE = "skipping refresh (cache)";
     public static final String SKIPPING_REFRESH_METHOD_CALL = "skipping refresh (method call)";
     public static final String NEW_OVERALL_DELAY = "new overall delay";
+    public static final String STARTUP_DELAY = "startup delay...";
 
 }

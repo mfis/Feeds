@@ -414,6 +414,23 @@ class FeedsDownloadServiceTest {
         assertEquals(getGroupsCount() * 2, countLogging(NEW_OVERALL_DELAY ));
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {0}) // 0=none
+    void refreshScheduler_startupDelay(int errorType) throws InterruptedException {
+        // Arrange
+        arrangeTimerBase1200(Duration.ofSeconds(0));
+        arrangeTestRefreshScheduler(errorType);
+        feedsConfigService.overwriteStartupDelayMinutes(1L);
+        // Act
+        feedsDownloadService.refreshScheduler();
+        Thread.sleep(1500);
+        feedsDownloadService.refreshScheduler();
+        // Assert
+        assertEquals(2, countLogging(STARTUP_DELAY));
+        verify(feedsHttpClient, times(0)).getFeeds(anyString());
+        assertEquals(0, countLogging(NEW_OVERALL_DELAY));
+    }
+
     // TODO: TTL
     // TODO: PROCESSING_SERVICE
 

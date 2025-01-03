@@ -9,6 +9,7 @@ import java.util.Map;
 public class FeedsConfig {
     private boolean logStackTrace;
     private String externalURL;
+    private long startupDelayMinutes;
     private List<FeedsGroup> groups;
     private List<Map<String, List<String>>> lists;
 

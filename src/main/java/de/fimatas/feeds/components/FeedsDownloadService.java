@@ -43,7 +43,9 @@ public class FeedsDownloadService {
 
     private final static String schedulerDelayString = "PT5M";
     protected final Duration minimumSchedulerRunDuration = Duration.parse(schedulerDelayString);
+
     protected LocalDateTime lastSchedulerRun = null;
+    protected LocalDateTime startupTime = null;
 
     private final LocalTime dailyStartTime = LocalTime.of(5, 20);
     private final LocalTime dailyEndTime = LocalTime.of(22, 30);
@@ -53,12 +55,13 @@ public class FeedsDownloadService {
     @PostConstruct
     protected void init() {
         lastSchedulerRun = feedsTimer.localDateTimeNow().minus(minimumSchedulerRunDuration).minusSeconds(1);
+        startupTime = feedsTimer.localDateTimeNow();
         if(FeedsCache.getInstance().isNotValid()){
             throw new IllegalStateException("FeedsCache is not valid");
         }
     }
 
-    @Scheduled(initialDelay = 1000 * 2, fixedDelayString = schedulerDelayString)
+    @Scheduled(initialDelay = 1000, fixedDelayString = schedulerDelayString)
     public void refreshScheduler() {
         var isUpdated = false;
         try {
@@ -82,6 +85,16 @@ public class FeedsDownloadService {
     }
 
     private boolean skip() {
+
+        if(startupTime == null){
+            log.warn("service is not initialized");
+            return true;
+        }
+
+        if(startupTime.plusMinutes(feedsConfigService.getStartupDelayMinutes()).isAfter(feedsTimer.localDateTimeNow())){
+            log.info(STARTUP_DELAY);
+            return true;
+        }
 
         if(FeedsCache.getInstance().isNotValid()){
             log.warn(CACHE_IS_NOT_VALID);

@@ -70,6 +70,21 @@ public class FeedsConfigService {
         return feedsConfig.getExternalURL();
     }
 
+    public long getStartupDelayMinutes(){
+        if(feedsConfig == null){
+            readFeedsConfig();
+        }
+        return feedsConfig.getStartupDelayMinutes();
+    }
+
+    public void overwriteStartupDelayMinutes(long startupDelayMinutes){
+        assert System.getProperty("active.profile", "").equals("test");
+        if(feedsConfig == null){
+            readFeedsConfig();
+        }
+        feedsConfig.setStartupDelayMinutes(startupDelayMinutes);
+    }
+
     private void resolveList(String in, List<String> allStrings) {
         feedsConfig.getLists().forEach(l -> l.keySet().forEach(k -> {
             if(k.equalsIgnoreCase(in)){
@@ -79,13 +94,14 @@ public class FeedsConfigService {
     }
 
     @SneakyThrows
-    private void readFeedsConfig() {
+    private synchronized void readFeedsConfig() {
         var localFeedsConfig = objectMapper.readValue(lookupConfigJsonDocument(), FeedsConfig.class);
         localFeedsConfig.getGroups().forEach(g -> {
             var groupFeeds = g.getGroupFeeds().stream().filter(FeedsConfig.FeedConfig::isActive).toList();
             g.setGroupFeeds(groupFeeds);
         });
         feedsConfig = localFeedsConfig;
+        log.info("startupDelayMinutes=" + feedsConfig.getStartupDelayMinutes());
     }
 
     private String lookupConfigJsonDocument() {
