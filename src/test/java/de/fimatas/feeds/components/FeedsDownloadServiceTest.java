@@ -64,7 +64,6 @@ class FeedsDownloadServiceTest {
     private LocalTime testLocalTime;
     private ZonedDateTime testZonedDateTime;
 
-
     private final static int COUNT_MULTIPLE_CALLS = 20;
 
     @BeforeEach
