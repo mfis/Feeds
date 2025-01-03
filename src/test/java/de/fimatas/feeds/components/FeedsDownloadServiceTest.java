@@ -464,7 +464,6 @@ class FeedsDownloadServiceTest {
         });
     }
 
-    // TODO: TTL
     // TODO: PROCESSING_SERVICE
 
     private int getFeedsCount(){
