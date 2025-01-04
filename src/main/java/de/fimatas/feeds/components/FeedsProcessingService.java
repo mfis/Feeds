@@ -24,7 +24,7 @@ public class FeedsProcessingService {
 
     private final FeedsConfigService feedsConfigService;
 
-    @Value("${relevantDescriptionLength}")
+    @Value("${feeds.relevantDescriptionLength}")
     private int relevantDescriptionLength;
 
     @SneakyThrows
@@ -37,10 +37,8 @@ public class FeedsProcessingService {
         Channel channel = (Channel) new WireFeedInput()
                 .build(new InputSource(new ByteArrayInputStream(originalFeed.getBody().getBytes(StandardCharsets.UTF_8))));
 
-        var originalLink = channel.getLink();
         var originalDescription = channel.getDescription();
-        channel.setLink(feedsConfigService.getExternalURL() + "/api/feeds/" + feedConfig.getKey());
-        channel.setDescription("FILTERED FEED. ORIGINAL LINK = '" + originalLink + "'. ORIGINAL DESCRIPTION = '" + originalDescription + "'.");
+        channel.setDescription("THE ITEMS OF THIS FEED WERE FILTERED BY '" + feedsConfigService.getExternalURL() + "'. ORIGINAL DESCRIPTION = '" + originalDescription + "'.");
 
         List<Item> filteredEntries = processEntries(channel.getItems(), feedConfig);
         channel.setItems(filteredEntries);

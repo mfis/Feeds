@@ -19,10 +19,10 @@ public class FeedsHttpClient {
 
     private final Map<String, LocalDateTime> lastUrlRequestCall = new HashMap<>();
 
-    @Value("${downloadTimeoutSeconds}")
+    @Value("${feeds.downloadTimeoutSeconds}")
     private int downloadTimeoutSeconds;
 
-    @Value("${downloadUrlFuseDuration}")
+    @Value("${feeds.downloadUrlFuseDuration}")
     protected Duration downloadUrlFuseDuration;
 
     public FeedsHttpClientResponse getFeeds(String url) {
