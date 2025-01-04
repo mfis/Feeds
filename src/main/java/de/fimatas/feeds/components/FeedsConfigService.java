@@ -18,7 +18,7 @@ import java.util.List;
 @CommonsLog
 public class FeedsConfigService {
 
-    @Value("${useTestConfig:true}")
+    @Value("${feeds.useTestConfig:true}")
     protected boolean useTestConfig;
 
     private final ObjectMapper objectMapper = new ObjectMapper();

@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class RootController {
 
-    @Value("${rootRedirectUrl}")
+    @Value("${feeds.rootRedirectUrl}")
     private String rootRedirectUrl;
 
     @GetMapping("/")
