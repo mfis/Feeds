@@ -11,6 +11,7 @@ import de.fimatas.feeds.util.FeedsUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.apachecommons.CommonsLog;
 import org.jdom2.Namespace;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +25,9 @@ import java.util.HashMap;
 @CommonsLog
 public class ExampleController {
 
+    @Value("${feeds.useTestConfig:true}")
+    protected boolean useTestConfig;
+
     private final FeedsTimer feedsTimer;
 
     public ExampleController(FeedsTimer feedsTimer){
@@ -35,6 +39,11 @@ public class ExampleController {
     @ResponseBody
     public void getDataFromExternalApi(HttpServletResponse response,
                                        @RequestParam(name = "key", required = false) String key) throws IOException, FeedException {
+
+        if(!useTestConfig){
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
 
         final var feedsResponse = getFeedResponse(key);
         response.setStatus(feedsResponse.getStatusCode());
