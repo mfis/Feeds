@@ -18,6 +18,9 @@ import java.util.List;
 
 public class FeedsProcessingService {
 
+    protected static final String THE_ITEMS_OF_THIS_FEED_WERE_FILTERED_BY = "THE ITEMS OF THIS FEED WERE FILTERED BY";
+    protected static final String ORIGINAL_DESCRIPTION = "ORIGINAL DESCRIPTION";
+
     public FeedsProcessingService(FeedsConfigService feedsConfigService) {
         this.feedsConfigService = feedsConfigService;
     }
@@ -25,7 +28,7 @@ public class FeedsProcessingService {
     private final FeedsConfigService feedsConfigService;
 
     @Value("${feeds.relevantDescriptionLength}")
-    private int relevantDescriptionLength;
+    protected int relevantDescriptionLength;
 
     @SneakyThrows
     public String processFeed(FeedsHttpClientResponse originalFeed, FeedsConfig.FeedConfig feedConfig){
@@ -38,7 +41,7 @@ public class FeedsProcessingService {
                 .build(new InputSource(new ByteArrayInputStream(originalFeed.getBody().getBytes(StandardCharsets.UTF_8))));
 
         var originalDescription = channel.getDescription();
-        channel.setDescription("THE ITEMS OF THIS FEED WERE FILTERED BY '" + feedsConfigService.getExternalURL() + "'. ORIGINAL DESCRIPTION = '" + originalDescription + "'.");
+        channel.setDescription(THE_ITEMS_OF_THIS_FEED_WERE_FILTERED_BY + " '" + feedsConfigService.getExternalURL() + "'. " + ORIGINAL_DESCRIPTION + " = '" + originalDescription + "'.");
 
         List<Item> filteredEntries = processEntries(channel.getItems(), feedConfig);
         channel.setItems(filteredEntries);

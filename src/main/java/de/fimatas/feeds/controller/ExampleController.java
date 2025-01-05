@@ -9,6 +9,7 @@ import de.fimatas.feeds.components.FeedsTimer;
 import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import de.fimatas.feeds.util.FeedsUtil;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.SneakyThrows;
 import lombok.extern.apachecommons.CommonsLog;
 import org.jdom2.Namespace;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,7 +27,7 @@ import java.util.HashMap;
 public class ExampleController {
 
     @Value("${feeds.useTestConfig:true}")
-    protected boolean useTestConfig;
+    public boolean useTestConfig;
 
     private final FeedsTimer feedsTimer;
 
@@ -56,7 +57,8 @@ public class ExampleController {
         }
     }
 
-    public FeedsHttpClientResponse getFeedResponse(String key) throws FeedException {
+    @SneakyThrows
+    public FeedsHttpClientResponse getFeedResponse(String key) {
 
         var response = new FeedsHttpClientResponse();
         response.setStatusCode(HttpServletResponse.SC_OK);

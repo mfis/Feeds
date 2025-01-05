@@ -464,9 +464,6 @@ class FeedsDownloadServiceTest {
         });
     }
 
-    // TODO: PROCESSING_SERVICE
-    // TODO: ExampleController nur bei Test Config
-
     private int getFeedsCount(){
         return (int) feedsConfigService.getFeedsGroups().stream().mapToLong(g -> g.getGroupFeeds().size()).sum();
     }
