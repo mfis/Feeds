@@ -41,10 +41,11 @@ public class FeedsConfigService {
     @PostConstruct
     private void init() {
         log.info("useTestConfig=" + useTestConfig);
+        refreshConfig();
     }
 
-    @Scheduled(initialDelay = 1, fixedDelay = listenerInterval)
-    private void startConfigFileListener() {
+    @Scheduled(initialDelay = 8000, fixedDelay = listenerInterval)
+    private synchronized void refreshConfig() {
         if(lastKnownFileDateModified != lookupConfigJsonLastModified()){
             lastKnownFileDateModified = lookupConfigJsonLastModified();
             log.info("refreshing config");
