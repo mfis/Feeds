@@ -10,6 +10,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -41,8 +42,8 @@ public class FeedsDownloadService {
     private final FeedsHttpClient feedsHttpClient;
     private final FeedsTimer feedsTimer;
 
-    private final static String schedulerDelayString = "PT5M";
-    protected final Duration minimumSchedulerRunDuration = Duration.parse(schedulerDelayString);
+    @Value("${feeds.schedulerDelay}")
+    protected Duration schedulerDelay;
 
     protected LocalDateTime lastSchedulerRun = null;
     protected LocalDateTime startupTime = null;
@@ -54,14 +55,15 @@ public class FeedsDownloadService {
 
     @PostConstruct
     protected void init() {
-        lastSchedulerRun = feedsTimer.localDateTimeNow().minus(minimumSchedulerRunDuration).minusSeconds(1);
+        lastSchedulerRun = feedsTimer.localDateTimeNow().minus(schedulerDelay).minusSeconds(1);
         startupTime = feedsTimer.localDateTimeNow();
         if(FeedsCache.getInstance().isNotValid()){
             throw new IllegalStateException("FeedsCache is not valid");
         }
+        log.info("schedulerDelay Minutes: " + schedulerDelay.toMinutes());
     }
 
-    @Scheduled(initialDelay = 1000, fixedDelayString = schedulerDelayString)
+    @Scheduled(initialDelay = 1000, fixedDelayString = "${feeds.schedulerDelay}")
     public void refreshScheduler() {
         var isUpdated = false;
         try {
@@ -110,7 +112,7 @@ public class FeedsDownloadService {
             log.debug(REFRESH_SCHEDULER_DAILY_END_TIME_REACHED);
             return true;
         }
-        if (lastSchedulerRun.plus(minimumSchedulerRunDuration).isAfter(feedsTimer.localDateTimeNow())) {
+        if (lastSchedulerRun.plus(schedulerDelay).isAfter(feedsTimer.localDateTimeNow())) {
             log.warn(REFRESH_SCHEDULER_CALLED_TOO_FREQUENTLY);
             return true;
         }

@@ -25,6 +25,8 @@ public class FeedsProcessingServiceTest {
         exampleController.useTestConfig = true;
         feedsConfigService = new FeedsConfigService();
         feedsConfigService.useTestConfig = true;
+        feedsConfigService.startupDelayMinutes = 0;
+        feedsConfigService.logStackTrace = false;
         feedsProcessingService = new FeedsProcessingService(feedsConfigService);
         feedsProcessingService.relevantDescriptionLength = 5000;
     }

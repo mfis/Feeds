@@ -1,7 +1,5 @@
 {
-	"logStackTrace": false,
 	"externalURL": "http://localhost",
-	"startupDelayMinutes": 0,
 	"groups": [
 		{
 			"groupId": "ExampleGroup1",

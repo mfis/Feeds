@@ -3,6 +3,7 @@ package de.fimatas.feeds.components;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.fimatas.feeds.model.FeedsConfig;
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.io.FileUtils;
@@ -20,6 +21,14 @@ public class FeedsConfigService {
 
     @Value("${feeds.useTestConfig:true}")
     protected boolean useTestConfig;
+
+    @Getter
+    @Value("${feeds.logStackTrace}")
+    protected boolean logStackTrace;
+
+    @Getter
+    @Value("${feeds.startupDelayMinutes}")
+    protected long startupDelayMinutes;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -62,27 +71,13 @@ public class FeedsConfigService {
         return allStrings;
     }
 
-    public boolean isLogStackTrace(){
-        return feedsConfig.isLogStackTrace();
-    }
-
     public String getExternalURL(){
         return feedsConfig.getExternalURL();
     }
 
-    public long getStartupDelayMinutes(){
-        if(feedsConfig == null){
-            readFeedsConfig();
-        }
-        return feedsConfig.getStartupDelayMinutes();
-    }
-
     public void overwriteStartupDelayMinutes(long startupDelayMinutes){
         assert System.getProperty("active.profile", "").equals("test");
-        if(feedsConfig == null){
-            readFeedsConfig();
-        }
-        feedsConfig.setStartupDelayMinutes(startupDelayMinutes);
+        this.startupDelayMinutes = startupDelayMinutes;
     }
 
     private void resolveList(String in, List<String> allStrings) {
@@ -101,7 +96,7 @@ public class FeedsConfigService {
             g.setGroupFeeds(groupFeeds);
         });
         feedsConfig = localFeedsConfig;
-        log.info("startupDelayMinutes=" + feedsConfig.getStartupDelayMinutes());
+        log.info("startupDelayMinutes=" + startupDelayMinutes);
     }
 
     private String lookupConfigJsonDocument() {

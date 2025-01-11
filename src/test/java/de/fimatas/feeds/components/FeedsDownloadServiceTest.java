@@ -19,6 +19,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,6 +29,11 @@ import org.slf4j.LoggerFactory;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 import java.io.IOException;
 import java.net.URL;
@@ -74,7 +80,6 @@ class FeedsDownloadServiceTest {
         testLocalDateTime = null;
         testLocalTime = null;
         testZonedDateTime = null;
-        //noinspection LoggerInitializedWithForeignClass
         logger = (Logger) LoggerFactory.getLogger(FeedsDownloadService.class);
         logger.setLevel(Level.DEBUG);
         loggingListAppender = new ListAppender<>();
@@ -88,6 +93,7 @@ class FeedsDownloadServiceTest {
         feedsConfigService = new FeedsConfigService();
         feedsConfigService.useTestConfig = true;
         feedsDownloadService = new FeedsDownloadService(feedsConfigService, feedsProcessingService, feedsHttpClient, feedsTimer);
+        feedsDownloadService.schedulerDelay = Duration.parse("PT5M");
     }
 
     @AfterEach
@@ -197,7 +203,7 @@ class FeedsDownloadServiceTest {
         arrangeDefaultRefreshDuration(1000);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
+            arrangeTimerBase1200(feedsDownloadService.schedulerDelay.multipliedBy(i + 1));
             feedsDownloadService.lastSchedulerRun = testLocalDateTime.minusDays(1);
             feedsDownloadService.refreshScheduler();
         });
@@ -216,7 +222,7 @@ class FeedsDownloadServiceTest {
         arrangeDefaultRefreshDuration(1000);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
+            arrangeTimerBase1200(feedsDownloadService.schedulerDelay.multipliedBy(i + 1));
             feedsDownloadService.lastSchedulerRun = testLocalDateTime.minusDays(1);
             feedsDownloadService.refreshScheduler();
             feedsConfigService.getFeedsGroups().forEach(fg -> FeedsCache.getInstance().lookupGroup(fg.getGroupId()).getGroupFeeds().clear()); // cheat feed update timestamp
@@ -236,7 +242,7 @@ class FeedsDownloadServiceTest {
         arrangeDefaultRefreshDuration(100);
         // Act
         IntStream.range(0, COUNT_MULTIPLE_CALLS).forEach(i -> {
-            arrangeTimerBase1200(feedsDownloadService.minimumSchedulerRunDuration.multipliedBy(i + 1));
+            arrangeTimerBase1200(feedsDownloadService.schedulerDelay.multipliedBy(i + 1));
             feedsDownloadService.lastSchedulerRun = testLocalDateTime.minusDays(1);
             feedsDownloadService.refreshScheduler();
             feedsConfigService.getFeedsGroups().forEach(fg
@@ -474,6 +480,20 @@ class FeedsDownloadServiceTest {
 
     private int countLogging(String messagePart) {
         return (int) loggingListAppender.list.stream().filter(log -> log.getFormattedMessage().contains(messagePart)).count();
+    }
+
+    @Test
+    void testSchedulerDelayValueMatchesFixedDelayString() throws NoSuchMethodException, NoSuchFieldException {
+        // Act
+        Field schedulerDelayField = FeedsDownloadService.class.getDeclaredField("schedulerDelay");
+        Value valueAnnotation = schedulerDelayField.getAnnotation(Value.class);
+        String schedulerDelayValue = valueAnnotation.value();
+        Method refreshSchedulerMethod = FeedsDownloadService.class.getDeclaredMethod("refreshScheduler");
+        Scheduled scheduledAnnotation = refreshSchedulerMethod.getAnnotation(Scheduled.class);
+        String fixedDelayStringValue = scheduledAnnotation.fixedDelayString();
+        // Assert
+        assertEquals(schedulerDelayValue, fixedDelayStringValue,
+                "The configured values for @Value and @Scheduled should match.");
     }
 
     @SneakyThrows

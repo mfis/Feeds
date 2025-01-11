@@ -1,6 +1,8 @@
 package de.fimatas.feeds.components;
 
 import de.fimatas.feeds.model.FeedsHttpClientResponse;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.apachecommons.CommonsLog;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -15,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+@CommonsLog
 public class FeedsHttpClient {
 
     private final Map<String, LocalDateTime> lastUrlRequestCall = new HashMap<>();
@@ -24,6 +27,11 @@ public class FeedsHttpClient {
 
     @Value("${feeds.downloadUrlFuseDuration}")
     protected Duration downloadUrlFuseDuration;
+
+    @PostConstruct
+    private void init() {
+        log.info("downloadUrlFuseDuration Minutes: " + downloadUrlFuseDuration.toMinutes());
+    }
 
     public FeedsHttpClientResponse getFeeds(String url) {
         if(lastUrlRequestCall.containsKey(url)){
