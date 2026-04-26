@@ -1,11 +1,11 @@
 package de.fimatas.feeds.model;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.io.FileUtils;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -21,8 +21,7 @@ public class FeedsCache {
 
     private FeedsCache() {
         super();
-        objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper = JsonMapper.builder().build();
         readFromCacheFile();
     }
 

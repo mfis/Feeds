@@ -1,6 +1,5 @@
 package de.fimatas.feeds.components;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import de.fimatas.feeds.model.FeedsConfig;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
@@ -9,10 +8,12 @@ import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.io.FileUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Path;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -30,7 +31,7 @@ public class FeedsConfigService {
     @Value("${feeds.startupDelayMinutes}")
     protected long startupDelayMinutes;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
     private FeedsConfig feedsConfig;
 

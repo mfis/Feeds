@@ -8,10 +8,12 @@ import de.fimatas.feeds.model.FeedsConfig;
 import de.fimatas.feeds.model.FeedsHttpClientResponse;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.springframework.beans.factory.annotation.Value;
 import org.xml.sax.InputSource;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,10 +68,10 @@ public class FeedsProcessingService {
                          StringUtils.SPACE +
                          StringUtils.trimToEmpty(item.getDescription() == null ? null : StringUtils.left(item.getDescription().getValue(), relevantDescriptionLength))
                  );
-            if(!excludes.isEmpty() && excludes.stream().anyMatch(excludeString -> StringUtils.containsIgnoreCase(relevantContent, excludeString))){
+            if(!excludes.isEmpty() && excludes.stream().anyMatch(excludeString -> Strings.CI.contains(relevantContent, excludeString))){
                 continue; // delete
             }
-            if(!includes.isEmpty() && includes.stream().noneMatch(includeString -> StringUtils.containsIgnoreCase(relevantContent, includeString))){
+            if(!includes.isEmpty() && includes.stream().noneMatch(includeString -> Strings.CI.contains(relevantContent, includeString))){
                 continue; // delete
             }
             processedEntries.add(item);
