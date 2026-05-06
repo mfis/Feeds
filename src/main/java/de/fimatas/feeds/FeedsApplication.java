@@ -4,6 +4,8 @@ import lombok.extern.apachecommons.CommonsLog;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.event.ApplicationStartedEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -16,8 +18,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class FeedsApplication {
 
 	public static void main(String[] args) {
-		log.info("Spring Boot Version: " + SpringBootVersion.getVersion());
-		SpringApplication.run(FeedsApplication.class, args);
+		SpringApplication app = new SpringApplication(FeedsApplication.class);
+		app.addListeners((ApplicationListener<ApplicationStartedEvent>) event -> {
+			log.info("Spring Boot Version: " + SpringBootVersion.getVersion());
+		});
+		app.run(args);
 	}
 
 }
