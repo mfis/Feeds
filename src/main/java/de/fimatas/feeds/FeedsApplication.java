@@ -9,6 +9,9 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+import java.io.InputStream;
+import java.lang.invoke.MethodHandles;
+
 @SpringBootApplication
 @EnableScheduling
 @CommonsLog
@@ -21,8 +24,21 @@ public class FeedsApplication {
 		SpringApplication app = new SpringApplication(FeedsApplication.class);
 		app.addListeners((ApplicationListener<ApplicationStartedEvent>) event -> {
 			log.info("Spring Boot Version: " + SpringBootVersion.getVersion());
+			logBytecodeVersion();
 		});
 		app.run(args);
 	}
 
+	private static void logBytecodeVersion() {
+		Class<?> c = MethodHandles.lookup().lookupClass();
+		try (InputStream in = c.getResourceAsStream(c.getSimpleName() + ".class")) {
+			if (in != null) {
+				log.info("Java Bytecode Version: " + (in.readAllBytes()[7] - 44));
+			} else {
+				log.warn("Java Bytecode Version: unknown");
+			}
+		} catch (Exception e) {
+			log.error("Java Bytecode Version: unknown", e);
+		}
+	}
 }
