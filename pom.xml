@@ -14,7 +14,7 @@
 	<name>feeds</name>
 	<description>Feeds</description>
 	<properties>
-		<java.version>17</java.version>
+		<java.version>25</java.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
 	</properties>
