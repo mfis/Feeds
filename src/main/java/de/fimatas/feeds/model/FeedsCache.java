@@ -155,7 +155,7 @@ public class FeedsCache {
 
     public static File lookupCacheFile(){
         var profile = System.getProperty("active.profile", "");
-        return Path.of(System.getProperty("user.home") + "/Documents/config/feeds/cache" + profile +".json").toFile();
+        return Path.of(System.getProperty("user.home") + "/Documents/base/config/feeds/cache" + profile +".json").toFile();
     }
 
     public static void destroyCache() {

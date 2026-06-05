@@ -16,8 +16,7 @@ import java.lang.invoke.MethodHandles;
 @EnableScheduling
 @CommonsLog
 @PropertySource(value = "classpath:application.properties", encoding = "UTF-8")
-@PropertySource(value = "file:/Users/mfi/Documents/config/feeds/feeds.properties", encoding = "UTF-8", ignoreResourceNotFound = true)
-@PropertySource(value = "file:/home/feedsapp/Documents/config/feeds/feeds.properties", encoding = "UTF-8", ignoreResourceNotFound = true)
+@PropertySource(value = "file:${user.home}/Documents/base/config/feeds/feeds.properties", encoding = "UTF-8")
 public class FeedsApplication {
 
 	public static void main(String[] args) {

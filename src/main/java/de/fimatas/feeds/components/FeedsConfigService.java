@@ -125,6 +125,6 @@ public class FeedsConfigService {
     }
 
     private File lookupConfigJsonFile(){
-        return Path.of(System.getProperty("user.home") + "/Documents/config/feeds/feeds.json").toFile();
+        return Path.of(System.getProperty("user.home") + "/Documents/base/config/feeds/feeds.json").toFile();
     }
 }
